@@ -173,7 +173,7 @@ node "$(dirname "$STATECHART")/doctor.mjs"
 # 确认前置工具就绪后再继续；显式 TLA2TOOLS/JAVA 可绕过自动安装。
 OUT="$(mktemp -d)"
 node formal/board-write/run.mjs "$OUT"
-node formal/board-write/render.mjs "$OUT"
+node formal/board-write/render.mjs "$OUT" "$OUT/chart/chart.mmd"
 ```
 
 运行器会核对 11 个配置各自应通过/应失败的性质，并执行真实代码的变异对照。渲染还需要本地 Chrome/Edge，可用 `CANVAS_BROWSER` 指定；请实际查看 `$OUT/chart.png`。只有打算替换已提交的脱敏结果与图表时，才给 run 命令加 `--record`。边界和同步规则见验证技能；已存结果是某次运行的证据，不是对你当前修改的新验证。

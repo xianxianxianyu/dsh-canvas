@@ -173,7 +173,7 @@ node "$(dirname "$STATECHART")/doctor.mjs"
 # Proceed only after prerequisites are ready; explicit TLA2TOOLS/JAVA bypass provisioning.
 OUT="$(mktemp -d)"
 node formal/board-write/run.mjs "$OUT"
-node formal/board-write/render.mjs "$OUT"
+node formal/board-write/render.mjs "$OUT" "$OUT/chart/chart.mmd"
 ```
 
 The run checks exact expected holds/failures across 11 configurations and executes real-code mutation controls. Rendering additionally needs local Chrome/Edge (`CANVAS_BROWSER` can select it); inspect `$OUT/chart.png`. Add `--record` to the run command only when intentionally replacing the committed sanitized results and chart. See the verification skill for bounds and synchronization rules; stored results are evidence from a particular run, not a new verification of your changes.
