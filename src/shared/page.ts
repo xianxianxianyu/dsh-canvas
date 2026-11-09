@@ -154,6 +154,10 @@ export type BoardContent =
   /** A file the page cannot show: its name and why. */
   | { readonly kind: 'card'; readonly title: string; readonly detail: string }
 
+/** Total ASCII data-URI bytes per board, including repeated image nodes and base64 overhead. */
+export const BOARD_EMBED_BYTES = 24 * 1024 * 1024
+export const BOARD_EMBED_LIMIT_REASON = `图片嵌入总量超过 ${BOARD_EMBED_BYTES / 1024 / 1024} MiB，只显示文件名；减少图片或缩小图片文件`
+
 /** Text for HTML element content and attribute values. */
 export function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/gu, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!)
@@ -263,8 +267,14 @@ export function boardPageHtml(scene: Scene, contents: ReadonlyMap<string, BoardC
   const theme = THEMES[scheme]
   const groups: string[] = []
   const others: string[] = []
+  let remainingImageBytes = BOARD_EMBED_BYTES
   for (const { node, rect } of scene.nodes) {
-    const html = nodeHtml(node, contents.get(node.id), `left:${rect.x + dx}px;top:${rect.y + dy}px;width:${rect.width}px;height:${rect.height}px`)
+    let content = contents.get(node.id)
+    if (node.type === 'file' && content?.kind === 'image') {
+      if (content.src.length > remainingImageBytes) content = { kind: 'card', title: node.file, detail: BOARD_EMBED_LIMIT_REASON }
+      else remainingImageBytes -= content.src.length
+    }
+    const html = nodeHtml(node, content, `left:${rect.x + dx}px;top:${rect.y + dy}px;width:${rect.width}px;height:${rect.height}px`)
     ;(node.type === 'group' ? groups : others).push(html)
   }
   const colors = [...new Set(scene.edges.map(entry => boardColor(entry.edge.color) ?? theme.pele.line))]

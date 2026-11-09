@@ -8,7 +8,7 @@ import { FILE_NODE, NOTE_TEXT, embedOf, imageType, noteHeight, parseBoard, scene
 import { renderDiagram } from '../shared/diagram.ts'
 import { sourceLocator } from '../shared/json.ts'
 import { markdownHtml } from '../shared/markdown.ts'
-import { boardPageHtml, type BoardContent } from '../shared/page.ts'
+import { BOARD_EMBED_BYTES, BOARD_EMBED_LIMIT_REASON, boardPageHtml, type BoardContent } from '../shared/page.ts'
 import type { Diagnostic } from '../shared/report.ts'
 import type { CheckContext, Checked } from './check.ts'
 
@@ -60,7 +60,7 @@ function labelOf(node: BoardNode): string {
   return node.label ?? ''
 }
 
-async function embed({ fs, path, signal }: BoardReadContext, node: FileNode): Promise<Embedded> {
+async function embed({ fs, path, signal }: BoardReadContext, node: FileNode, remainingImageBytes: number): Promise<Embedded> {
   const card = (detail: string): BoardContent => ({ kind: 'card', title: node.file, detail })
   const problem = (kind: 'errors' | 'warnings', message: string, summary: string): Embedded => ({
     content: card(summary), summary, errors: kind === 'errors' ? [message] : [], warnings: kind === 'warnings' ? [message] : [], located: [],
@@ -100,8 +100,15 @@ async function embed({ fs, path, signal }: BoardReadContext, node: FileNode): Pr
       }
       case 'image': {
         if (info.size > MAX_IMAGE_BYTES) return problem('warnings', `节点 ${node.id} 的图片超过 8 MB，只显示文件名`, '图片太大，只显示文件名')
+        const prefix = `data:${imageType(absolute) ?? imageType(node.file)};base64,`
+        const exceedsBudget = (bytes: number): boolean => prefix.length + 4 * Math.ceil(bytes / 3) > remainingImageBytes
+        // Reserve by encoded size before I/O, not after constructing a potentially enormous page.
+        if (exceedsBudget(info.size)) return problem('warnings', `节点 ${node.id}：${BOARD_EMBED_LIMIT_REASON}`, BOARD_EMBED_LIMIT_REASON)
         const bytes = await fs.readBytes(target, signal, MAX_IMAGE_BYTES)
-        return { content: { kind: 'image', src: `data:${imageType(absolute) ?? imageType(node.file)};base64,${Buffer.from(bytes).toString('base64')}` }, summary: '图片', errors: [], warnings: [], located: [] }
+        // A file may grow between stat and read.
+        if (exceedsBudget(bytes.length)) return problem('warnings', `节点 ${node.id}：${BOARD_EMBED_LIMIT_REASON}`, BOARD_EMBED_LIMIT_REASON)
+        const encoded = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('base64')
+        return { content: { kind: 'image', src: prefix + encoded }, summary: '图片', errors: [], warnings: [], located: [] }
       }
       case 'board':
         return problem('warnings', `节点 ${node.id} 嵌入的是画板，只显示文件名，不展开（只展开一层）`, '画板，只显示文件名')
@@ -146,12 +153,14 @@ export async function prepareBoard(source: string, context: BoardReadContext): P
   }
   const contents = new Map<string, BoardContent>()
   const lines: string[] = []
+  let remainingImageBytes = BOARD_EMBED_BYTES
   for (const node of board.nodes) {
     const { line, column } = locate(layout.elements.get(node.id)!.start)
     const at = (severity: Diagnostic['severity'], message: string): Diagnostic => ({ severity, message, line, column })
     if (distant.has(node.id)) diagnostics.push(at('warning', `节点 ${node.id} 距离其余节点太远（间隔超过 ${MAX_NODE_GAP} px），先把节点收拢`))
     if (node.type === 'file') {
-      const embedded = await embed(context, node)
+      const embedded = await embed(context, node, remainingImageBytes)
+      if (embedded.content.kind === 'image') remainingImageBytes -= embedded.content.src.length
       contents.set(node.id, embedded.content)
       lines.push(`${node.id} ← ${node.file}：${embedded.summary}`)
       diagnostics.push(...embedded.errors.map(message => at('error', message)), ...embedded.located, ...embedded.warnings.map(message => at('warning', message)))

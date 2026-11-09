@@ -29,7 +29,7 @@ One node or one edge per line, tab indents, exactly like this. The user's board 
 - **`type: "file"`** has `file`: a path **relative to the board's own directory** (not your working directory), or an absolute path. What it shows:
   - `.mmd` / `.mermaid`: the diagram, scaled to fit the box. The header bar takes 24 px; give a diagram room (check the warning below).
   - `.md`: the rendered note.
-  - `.png` `.jpg` `.webp` `.gif` `.svg`: the image (up to 8 MB).
+  - `.png` `.jpg` `.webp` `.gif` `.svg`: the image (up to 8 MiB each). A board has a 24 MiB total data-URI budget, including base64 overhead and repeated nodes. Images that do not fit the remaining budget, in file order, show a filename card with the reason and a located warning; the check still passes and later smaller images can use the remaining space.
   - Another `.canvas`, or any other file: only its name. Boards open one level deep.
 - **`type: "link"`** has `url`; it shows the address, nothing is fetched. **`type: "group"`** is a labelled frame (`label`) drawn behind the nodes inside it.
 - **Edges** have `id`, `fromNode` and `toNode` (node ids), and optionally `fromSide` / `toSide` (`top`, `right`, `bottom`, `left`; left out, the side facing the other node is used), `fromEnd` / `toEnd` (`none` or `arrow`; by default only the `to` end has an arrow) and `label`.

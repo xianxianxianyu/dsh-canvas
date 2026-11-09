@@ -23,7 +23,7 @@ function badRequest(message: string): Response {
 
 /**
  * `POST { path, source }` → `{ contents: [id, BoardContent][], diagnostics }`.
- * Invalid board structure returns 409; missing or broken embeds return cards and diagnostics.
+ * Invalid board structure returns 409; broken or over-budget embeds return cards and diagnostics.
  * @param deps - read-only access to the same filesystem used by `canvas_check`.
  * @returns an exact Connection route, which DSH restricts to owner Peers.
  */
@@ -44,6 +44,7 @@ export function boardRenderRoute(deps: Pick<BoardReadContext, 'fs'>): FetchRoute
       try {
         const artifact = await resolveArtifact(deps.fs, parsed.data.path, undefined, request.signal)
         if (artifact.mode !== 'board') return badRequest(`只能渲染 .canvas 画板：${artifact.path}`)
+        // The shared preparation enforces the same total data-URI budget as canvas_check and page.ts.
         const prepared = await prepareBoard(parsed.data.source, { fs: deps.fs, path: artifact.path, signal: request.signal })
         if (!prepared.ok) {
           return Response.json({
