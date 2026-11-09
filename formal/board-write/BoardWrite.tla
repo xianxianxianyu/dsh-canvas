@@ -237,4 +237,67 @@ RouteTerminates == \A id \in 1..Requests:
 \* may instead decline. Invalid JSON forever cannot be safely repaired here.
 RecoveryEventually == (<>[]file.valid) =>
   ((0 \in acknowledged /\ 0 \notin file.facts) ~> (0 \in file.facts \/ route.declined))
+
+\* Independent bounded projection of BoardJournal.remaining / record / lost.
+\* Each retained field carries its original batch identity and timestamp. This
+\* supplements (rather than multiplies) the publication interleaving model.
+Geometry == {"x", "y", "width", "height"}
+SizeFields == {"width", "height"}
+Intent(fields, box, batch) ==
+  { [field |-> f, value |-> box[f], id |-> batch, at |-> batch] : f \in fields }
+ResizeBox == [x |-> 0, y |-> 0, width |-> 300, height |-> 50]
+DragBox == [x |-> 40, y |-> 40, width |-> 500, height |-> 50]
+FieldInit ==
+  /\ file = [x |-> 0, y |-> 0, width |-> 100, height |-> 100]
+  /\ route = [phase |-> "resize", intents |-> {}, replay |-> {}]
+  /\ agent = 0 /\ acknowledged = {}
+  /\ wroteOverInvalid = FALSE /\ replayChanged = FALSE
+FieldResize ==
+  /\ route.phase = "resize"
+  /\ file' = ResizeBox
+  /\ route' = [route EXCEPT !.phase = "agent-width",
+       !.intents = Intent(Geometry, ResizeBox, 1)]
+  /\ UNCHANGED <<agent, acknowledged, wroteOverInvalid, replayChanged>>
+FieldAgentWidth ==
+  /\ route.phase = "agent-width"
+  /\ file' = [file EXCEPT !.width = 500]
+  /\ route' = [route EXCEPT !.phase = "drag"]
+  /\ UNCHANGED <<agent, acknowledged, wroteOverInvalid, replayChanged>>
+FieldDrag(mergeLabels) ==
+  /\ route.phase = "drag"
+  /\ file' = DragBox
+  /\ route' = [route EXCEPT !.phase = "inspect",
+       !.intents = IF mergeLabels
+         THEN Intent(SizeFields, ResizeBox, 2) \cup Intent({"x", "y"}, DragBox, 2)
+         ELSE {i \in @ : i.field \notin {"x", "y"}} \cup Intent({"x", "y"}, DragBox, 2)]
+  /\ UNCHANGED <<agent, acknowledged, wroteOverInvalid, replayChanged>>
+FieldInspect ==
+  /\ route.phase = "inspect"
+  /\ LET lost == {i \in route.intents : file[i.field] # i.value}
+         batch == (CHOOSE i \in lost : TRUE).id
+     IN route' = [route EXCEPT !.phase = "agent-position",
+          !.replay = {i \in route.intents : i.id = batch}]
+  /\ UNCHANGED <<file, agent, acknowledged, wroteOverInvalid, replayChanged>>
+FieldAgentPosition ==
+  /\ route.phase = "agent-position"
+  /\ file' = [file EXCEPT !.x = 60, !.y = 60]
+  /\ route' = [route EXCEPT !.phase = "reapply"]
+  /\ UNCHANGED <<agent, acknowledged, wroteOverInvalid, replayChanged>>
+FieldReapply ==
+  /\ route.phase = "reapply"
+  /\ file' = [f \in Geometry |-> IF \E i \in route.replay : i.field = f
+       THEN (CHOOSE i \in route.replay : i.field = f).value ELSE file[f]]
+  /\ route' = [route EXCEPT !.phase = "done"]
+  /\ UNCHANGED <<agent, acknowledged, wroteOverInvalid, replayChanged>>
+FieldDone == route.phase = "done" /\ UNCHANGED vars
+FieldNext(mergeLabels) == FieldResize \/ FieldAgentWidth \/ FieldDrag(mergeLabels)
+  \/ FieldInspect \/ FieldAgentPosition \/ FieldReapply \/ FieldDone
+FieldSpec == FieldInit /\ [][FieldNext(FALSE)]_vars
+MergedLabelSpec == FieldInit /\ [][FieldNext(TRUE)]_vars
+FieldTypeOK == /\ DOMAIN file = Geometry
+  /\ \A i \in route.intents : i.field \in Geometry /\ i.id \in {1, 2} /\ i.at \in {1, 2}
+RetainedFieldIdentity == \A i \in route.intents:
+  i.field \in SizeFields => (i.id = 1 /\ i.at = 1)
+RecoveryUsesRetainedFields == route.phase = "done" =>
+  (file.x = 60 /\ file.y = 60 /\ file.width = 300 /\ file.height = 50)
 =============================================================================

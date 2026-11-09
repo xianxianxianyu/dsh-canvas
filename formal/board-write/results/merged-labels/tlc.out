@@ -1,0 +1,70 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Warning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the "-XX:+UseParallelGC" property.
+(Use the -nowarning option to disable this warning.)
+Running breadth-first search Model-Checking with fp 0 and seed -6526224536855782186 with 1 worker on 12 cores with 8192MB heap and 64MB offheap memory [pid: 91144] (Mac OS X 27.0.1 aarch64, Eclipse Adoptium 25.0.5 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file $CANVAS_REPO/formal/board-write/BoardWrite.tla
+Parsing file /private$TMPDIR/statechart-pwI4Ib/statechart-ytsTAr/tmp-verdict-1/Integers.tla
+Parsing file /private$TMPDIR/statechart-pwI4Ib/statechart-ytsTAr/tmp-verdict-1/Naturals.tla
+Semantic processing of module Naturals
+Semantic processing of module Integers
+Semantic processing of module BoardWrite
+Starting... (2026-11-09 08:18:26)
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-11-09 08:18:26.
+Error: Invariant RetainedFieldIdentity is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ route = [phase |-> "resize", intents |-> {}, replay |-> {}]
+/\ file = [x |-> 0, y |-> 0, width |-> 100, height |-> 100]
+/\ acknowledged = {}
+/\ agent = 0
+/\ wroteOverInvalid = FALSE
+/\ replayChanged = FALSE
+
+State 2: <FieldResize line 256, col 3 to line 260, col 71 of module BoardWrite>
+/\ route = [ phase |-> "agent-width",
+  intents |->
+      { [id |-> 1, field |-> "x", value |-> 0, at |-> 1],
+        [id |-> 1, field |-> "y", value |-> 0, at |-> 1],
+        [id |-> 1, field |-> "width", value |-> 300, at |-> 1],
+        [id |-> 1, field |-> "height", value |-> 50, at |-> 1] },
+  replay |-> {} ]
+/\ file = [x |-> 0, y |-> 0, width |-> 300, height |-> 50]
+/\ acknowledged = {}
+/\ agent = 0
+/\ wroteOverInvalid = FALSE
+/\ replayChanged = FALSE
+
+State 3: <FieldAgentWidth line 262, col 3 to line 265, col 71 of module BoardWrite>
+/\ route = [ phase |-> "drag",
+  intents |->
+      { [id |-> 1, field |-> "x", value |-> 0, at |-> 1],
+        [id |-> 1, field |-> "y", value |-> 0, at |-> 1],
+        [id |-> 1, field |-> "width", value |-> 300, at |-> 1],
+        [id |-> 1, field |-> "height", value |-> 50, at |-> 1] },
+  replay |-> {} ]
+/\ file = [x |-> 0, y |-> 0, width |-> 500, height |-> 50]
+/\ acknowledged = {}
+/\ agent = 0
+/\ wroteOverInvalid = FALSE
+/\ replayChanged = FALSE
+
+State 4: <FieldDrag line 267, col 3 to line 273, col 71 of module BoardWrite>
+/\ route = [ phase |-> "inspect",
+  intents |->
+      { [id |-> 2, field |-> "x", value |-> 40, at |-> 2],
+        [id |-> 2, field |-> "y", value |-> 40, at |-> 2],
+        [id |-> 2, field |-> "width", value |-> 300, at |-> 2],
+        [id |-> 2, field |-> "height", value |-> 50, at |-> 2] },
+  replay |-> {} ]
+/\ file = [x |-> 40, y |-> 40, width |-> 500, height |-> 50]
+/\ acknowledged = {}
+/\ agent = 0
+/\ wroteOverInvalid = FALSE
+/\ replayChanged = FALSE
+
+4 states generated, 4 distinct states found, 0 states left on queue.
+The depth of the complete state graph search is 4.
+The average outdegree of the complete state graph is 1 (minimum is 1, the maximum 1 and the 95th percentile is 1).
+Finished in 00s at (2026-11-09 08:18:26)
+

@@ -97,5 +97,35 @@
       "agent-3",
       "person"
     ]
+  },
+  {
+    "scenario": "per-field identity and recovery",
+    "originalBatch": "board-1",
+    "reportedBatch": "board-1",
+    "replay": [
+      {
+        "op": "place",
+        "id": "person",
+        "width": 300,
+        "height": 50
+      }
+    ],
+    "positionAfterRecovery": 60
+  },
+  {
+    "scenario": "merged-label scratch mutant",
+    "originalBatch": "board-1",
+    "reportedBatch": "board-2",
+    "replay": [
+      {
+        "op": "place",
+        "id": "person",
+        "x": 40,
+        "y": 40,
+        "width": 300,
+        "height": 50
+      }
+    ],
+    "positionAfterRecovery": 40
   }
 ]

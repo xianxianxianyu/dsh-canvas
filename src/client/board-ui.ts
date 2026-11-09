@@ -58,6 +58,11 @@ export function describeRecoveryOp(op: BoardOp, board: Board | undefined, t: Doc
     case 'addNote': {
       const size = (op.width === undefined ? '' : t('board.recovery.width', { width: op.width }))
         + (op.height === undefined ? '' : t('board.recovery.height', { height: op.height }))
+      if (op.op === 'place' && (op.x === undefined || op.y === undefined)) {
+        const position = (op.x === undefined ? '' : t('board.recovery.x', { x: op.x }))
+          + (op.y === undefined ? '' : t('board.recovery.y', { y: op.y }))
+        return t('board.recovery.fields', { target: nodeLabel(op.id), fields: position + size })
+      }
       return t(`board.recovery.${op.op}`, { target: op.op === 'place' ? nodeLabel(op.id) : quote(firstLine(op.text) || op.id), x: op.x, y: op.y, size })
     }
     case 'setText': {

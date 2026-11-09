@@ -167,5 +167,28 @@
       "RouteTerminates",
       "RecoveryEventually"
     ]
+  },
+  {
+    "case": "fields",
+    "states": "7",
+    "broken": [],
+    "held": [
+      "FieldTypeOK",
+      "RetainedFieldIdentity",
+      "RecoveryUsesRetainedFields",
+      "NoDeadlock"
+    ]
+  },
+  {
+    "case": "merged-labels",
+    "states": "7",
+    "broken": [
+      "RecoveryUsesRetainedFields",
+      "RetainedFieldIdentity"
+    ],
+    "held": [
+      "FieldTypeOK",
+      "NoDeadlock"
+    ]
   }
 ]

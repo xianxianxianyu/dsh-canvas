@@ -14,8 +14,9 @@ const text = z.string().max(20_000)
 const color = z.string().regex(/^(?:[1-6]|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6})$/u, 'color 是 "1" 到 "6" 或 #rgb / #rrggbb')
 
 export const boardOpSchema = z.discriminatedUnion('op', [
-  /** Drag or resize: the node's absolute box. */
-  z.strictObject({ op: z.literal('place'), id, x: coordinate, y: coordinate, width: size.optional(), height: size.optional() }),
+  /** Drag, resize or retained recovery: exactly the supplied absolute fields (at least one). */
+  z.strictObject({ op: z.literal('place'), id, x: coordinate.optional(), y: coordinate.optional(), width: size.optional(), height: size.optional() })
+    .refine(op => op.x !== undefined || op.y !== undefined || op.width !== undefined || op.height !== undefined, 'place 至少需要一个坐标或尺寸'),
   /** A new sticky note (a text node); never replaces an existing element. */
   z.strictObject({ op: z.literal('addNote'), id, text, x: coordinate, y: coordinate, width: size, height: size, color: color.optional() }),
   /** New note text, only while the note still reads `ifText`. */

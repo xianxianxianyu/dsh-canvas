@@ -29,6 +29,12 @@ async function journalMutant(before, after) {
 }
 const NoJournal = await journalMutant("if (outcome.kind === 'done') this.record(path, ops, outcome.statuses)", '')
 const RetainDeclined = await journalMutant('.filter(batch => !declined.has(batch.id))', '.filter(() => true)')
+const MergeLabels = await journalMutant('for (const next of applied) {', `for (let next of applied) {
+  if (next.op === 'place') {
+    for (const prior of batches) for (const old of prior.ops) {
+      if (old.op === 'place' && old.id === next.id) next = { ...old, ...next }
+    }
+  }`)
 const note = id => ({ id, type: 'text', text: id, x: 0, y: 0, width: 100, height: 100 })
 const board = (...ids) => JSON.stringify({ nodes: ids.map(note), edges: [] })
 const ops = [{ op: 'addNote', ...note('person') }]
@@ -195,6 +201,30 @@ for (const Journal of [BoardJournal, RetainDeclined]) {
   assert.equal((await writeBoardOps(fs, target, ops, signal)).kind, 'done')
   assert.equal(fs.ids().length, MAX_ATTEMPTS + 1)
   evidence.push({ scenario: 'busy then resend', rounds, facts: fs.ids() })
+}
+for (const Journal of [BoardJournal, MergeLabels]) {
+  const fs = new File()
+  fs.text = board('person')
+  const journal = new Journal()
+  await journal.apply(fs, target, target.displayPath, [{ op: 'place', id: 'person', x: 0, y: 0, width: 300, height: 50 }], signal)
+  fs.text = fs.text.replace('"width":300', '"width":500')
+  fs.version++
+  const [resize] = journal.lost(target.displayPath, fs.text)
+  await journal.apply(fs, target, target.displayPath, [{ op: 'place', id: 'person', x: 40, y: 40 }], signal)
+  const [retained] = journal.lost(target.displayPath, fs.text)
+  assert.equal(retained.id === resize.id, Journal === BoardJournal)
+  if (Journal === BoardJournal) {
+    assert.equal(retained.at, resize.at)
+    assert.deepEqual(retained.ops, [{ op: 'place', id: 'person', width: 300, height: 50 }])
+  }
+  fs.text = fs.text.replace('"x":40,"y":40', '"x":60,"y":60')
+  fs.version++
+  await journal.apply(fs, target, target.displayPath, retained.ops, signal)
+  const node = JSON.parse(fs.text).nodes[0]
+  assert.equal(node.x, Journal === BoardJournal ? 60 : 40)
+  assert.equal(node.width, 300)
+  evidence.push({ scenario: Journal === BoardJournal ? 'per-field identity and recovery' : 'merged-label scratch mutant',
+    originalBatch: resize.id, reportedBatch: retained.id, replay: retained.ops, positionAfterRecovery: node.x })
 }
 const out = resolve(process.argv[2] ?? join(tmpdir(), 'dsh-board-writes'))
 await mkdir(out, { recursive: true })

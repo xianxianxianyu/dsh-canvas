@@ -38,6 +38,10 @@ function remaining(old: BoardOp, next: BoardOp): BoardOp | undefined {
     return ids.length ? { ...old, ids } : undefined
   }
   if ('id' in next && 'id' in old && next.id === old.id) {
+    if (old.op === 'place' && next.op === 'place') {
+      const fields = (['x', 'y', 'width', 'height'] as const).filter(key => old[key] !== undefined && next[key] === undefined)
+      return fields.length ? { op: 'place', id: old.id, ...Object.fromEntries(fields.map(key => [key, old[key]])) } : undefined
+    }
     if (next.op === old.op) return undefined
     if ((next.op === 'addEdge' || next.op === 'removeEdge') && (old.op === 'addEdge' || old.op === 'removeEdge')) return undefined
   }
@@ -91,13 +95,7 @@ export class BoardJournal {
     let batches = [...(this.batches.get(path) ?? [])]
     const batch: BoardBatch = { id: `board-${++this.sequence}`, at: new Date().toISOString(), ops: [] }
     batches.push(batch)
-    for (let next of applied) {
-      // A later move supersedes position, but preserves a previous explicit resize when omitted.
-      if (next.op === 'place') {
-        for (const prior of batches) for (const old of prior.ops) {
-          if (old.op === 'place' && old.id === next.id) next = { ...old, ...next }
-        }
-      }
+    for (const next of applied) {
       batches = batches.map(prior => ({ ...prior, ops: prior.ops.flatMap(old => {
         const keep = remaining(old, next)
         return keep === undefined ? [] : [keep]

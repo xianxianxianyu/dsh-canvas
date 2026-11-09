@@ -14,8 +14,8 @@ acknowledged change, not whether a parser accepts arbitrary input.
 ## Coverage and synchronization
 
 **Source synchronization:** canvas same-commit subject
-`fix(board): preserve untouched member source spans` (own-key rewrites preserve
-unknown values byte-for-byte; protocol and retained-intent model unchanged); DSH source
+`fix(board): retain recovery intent per field` (place supersession subtracts only
+supplied fields, retaining original batch identity/time and exact replay fields); DSH source
 `b830ec950faba0a46dda564be3e2d854afed94f1` (rc.5). The model, all configurations,
 scratch controls and recorded results were rerun together. The installed 0.2.2-rc.1 P1
 probe found the observation policy disabled, unlike that source default. Thus
@@ -46,6 +46,7 @@ Function names remain authoritative when line numbers move.
 | `JournalFlagsLoss`, `NoSilentLoss` | `BoardJournal.lost`: dry-run current text, any applied status means recoverable loss; `handleBoard` GET and `src/host/check.ts` `checkFile` expose losses, or explicitly report invalid source. `src/host/index.ts` `apply` shares one journal across route and check. |
 | `YouReapplyChange` | Reapply submits the same ops through `handleBoard` / `BoardJournal.apply`; an unchanged retry does not create a batch. |
 | `YouDeclineRecovery`, `DeclinedNeverReported` | `handleBoard` POST `{ sessionId?, path, decline: batchIds }` awaits `BoardJournal.decline` and echoes `{ declined: batchIds }`. `decline` uses the same per-path `enqueue` as `apply` and physically removes the selected retained batches. Absent IDs succeed; other batches/paths and board bytes are unchanged. The action models successful queued completion, not a local banner dismissal. |
+| `FieldResize`, `FieldDrag`, `FieldInspect`, `FieldReapply` | `BoardJournal.remaining` subtracts only fields provided by the next place; `record` preserves each remaining batch's id/time; `lost` returns those partial ops, accepted unchanged by `boardOpSchema` and `applyBoardOps`. `Fields.cfg` checks this separate bounded projection. |
 | `AgentStatsFile`, `AgentReadsFile`, `AgentObservesRead` | `DSH/packages/fs/tool-fs/src/read.ts:137-163` `applyReadTool`'s `execute`; `read-target.ts:19-34` `resolveRegularReadTarget`: stat before text, emit the captured version afterwards. |
 | `AgentWritesObserved`, `AgentEditsGuarded` | `DSH/packages/fs/fs-observation-policy/src/index.ts:65-87` `ObservedStateGate.writeIntent` / `editIntent`; `tool-fs/src/write.ts:121-131` `applyWriteTool`'s `execute`, `edit.ts:133-147` `applyEditTool`'s `execute`; `fs-local/src/index.ts:208-254,263-290` `writeText` / `editText`. With policy off, overwrite is blind; hunk edit still uses current text and fails when its anchor changed. |
 | `AgentEditsCurrent` | `DSH/packages/fs/fs-local/src/index.ts:263-280` `LocalFileSystem.editText` with no expectation: current-text read/match/write under one lock. Models a hunk on an unaffected anchor; not a blind snapshot overwrite. Also covers a bare-provider caller when policy is on. |
@@ -106,8 +107,10 @@ sends of one person batch, with repeatable journal recovery requests. All
 stat/read/observe/write orderings, initial presence/validity, corruption, guarded
 writes, current-text edits, stale reread, busy and lost completed replies are
 included. `PolicyOff.cfg` has the same bound with blind overwrites permitted.
-The journal has **one retained disjoint intent**: safely below its 20-batch
-retention bound; no restart, eviction or supersession is modeled.
+The publication model has **one retained disjoint intent**, below the 20-batch
+retention bound. `Fields.cfg` separately checks resize → agent width edit → drag →
+loss inspection → agent position edit → reapply. It retains old width/height under
+batch/time 1 and new x/y under batch/time 2. No restart or eviction is modeled.
 
 Recorded exhaustive outcomes: policy on **10,268 states**, all eleven rules hold;
 policy off **21,205 states**, only `NoLostAcknowledgedChange` fails, while
@@ -116,6 +119,9 @@ rules hold. The retained-decline negative control reaches **276 states** and
 breaks `DeclinedNeverReported` after twelve steps. These are bounded results,
 not a proof of the entire application; `results/summary.json`, each case's
 `report.md` / TLC output, and `results/code-probes.json` retain the evidence.
+The field projection reaches **7 states** with all four rules holding. Its
+merged-label control also reaches 7 states: identity fails after 3 steps and
+exact-field recovery fails after 6. The real-code scratch control reproduces both.
 
 `Chart.cfg` has zero agent publications and two sends: **33 states**, all eleven
 rules hold. It explains the person save workflow, not concurrency or decline.
@@ -138,6 +144,7 @@ exactly these failures, never an arbitrary failed invocation:
 | `ReplayWrites.cfg` | Remove the no-change branch. A resend writes identical bytes and changes version; `ReplaySafe` fails. |
 | `NoJournal.cfg` | Policy off plus no retained intent. Blind overwrite silently loses the person change and the run can stay there forever. `NoLostAcknowledgedChange`, `NoSilentLoss`, `RecoveryEventually` fail. |
 | `RetainDeclined.cfg` | Policy off plus `DeclineRemovesIntent = FALSE`: the person declines after a blind overwrite, but the batch stays retained. `NoLostAcknowledgedChange` and `DeclinedNeverReported` fail; all other rules hold. Every other config sets `DeclineRemovesIntent = TRUE`. |
+| `MergedLabels.cfg` | Merge older resize fields into the drag's batch/time. `RetainedFieldIdentity` fails on drag; `RecoveryUsesRetainedFields` fails when replaying the mislabeled batch also resets the agent's newer position. |
 
 `probe.mjs` loads in-memory scratch mutants of the **real** `writeBoardOps` and
 `BoardJournal`: remove CAS, bypass invalid rejection, remove no-change return,
@@ -153,6 +160,10 @@ overwrite from resurrecting the declined report. The retained-entry mutant
 must still report that same batch both immediately and after a later overwrite.
 The P1 refresh mutant uses a provider seam. These checks never edit `src/` and
 do not establish a live DSH provider's behavior.
+The merged-label code mutant restores the old `{ ...old, ...next }` rule. Its
+resize is reported as `board-2` rather than `board-1`, and recovery moves x back
+to 40 instead of retaining the agent's 60. The normal code retains width/height
+under the resize's original id/time, and its replay leaves x/y untouched.
 
 ## Read a counterexample
 
@@ -198,7 +209,7 @@ a located error. This bound also keeps accepted trees safe for recursive consume
 Finite model, one provider lock and one agent; no intentional deletes or edits
 to the other author's fact. Corrupt syntax may retain underlying facts. It does
 not prove arbitrary mixed batches, geometry, parser correctness, formatting,
-text conflicts, same-id resurrection, journal supersession or retention policy.
+text conflicts, same-id resurrection, arbitrary supersession or retention policy.
 The hunk anchor abstracts an element changed by the person; unaffected-anchor
 edits use current content. Only one route is active (the journal serializes
 `apply` and `decline`); successful decline completion is one transition.

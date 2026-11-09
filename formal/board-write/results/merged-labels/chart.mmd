@@ -1,0 +1,36 @@
+---
+title: "Keep resize recovery attached to its original save"
+---
+stateDiagram-v2
+  state "Legend" as legend {
+    lg0: Breaks RecoveryUsesRetainedFields or RetainedFieldIdentity
+    lg1: Path to the RecoveryUsesRetainedFields or RetainedFieldIdentity bug
+  }
+  class lg0 breaks
+  class lg1 bugPath
+  s0: Before resize
+  s1: Resize saved at time 1
+  s2: Agent changed width to 500
+  s3: Drag saved at time 2
+  s4: Recoverable resize selected
+  s5: Agent moved to 60,60
+  s6: Recovery also reverted the newer position
+  [*] --> s0
+  s0 --> s1: you resize to 300 by 50
+  s1 --> s2: agent sets width to 500
+  s2 --> s3: you drag to 40,40
+  s3 --> s4: inspect retained fields and batch identity
+  s4 --> s5: agent moves to 60,60
+  s5 --> s6: reapply only the selected retained fields
+  classDef breaks fill:#ffecee,stroke:#e72e3b,stroke-width:2.5px,color:#cd2834
+  class s0 bugPath
+  class s1 bugPath
+  class s2 bugPath
+  class s3 breaks
+  class s3 bugPath
+  class s4 breaks
+  class s4 bugPath
+  class s5 breaks
+  class s5 bugPath
+  class s6 breaks
+  class s6 bugPath

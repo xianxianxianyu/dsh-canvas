@@ -138,4 +138,11 @@ for (const [language, dictionary] of Object.entries({ zh, en })) {
       '删除连线「missing-edge」（端点信息不可用）',
     ])
   })
+
+  test(`${language}: retained resize and single-coordinate recovery describe only retained fields`, () => {
+    const ops = [{ op: 'place', id: 'a', width: 300, height: 50 }, { op: 'place', id: 'a', x: 40 }]
+    assert.deepEqual(ops.map(op => describeRecoveryOp(op, undefined, t)), language === 'en'
+      ? ['Adjust “a” · width 300 · height 50', 'Adjust “a” · x 40']
+      : ['调整「a」 · 宽 300 · 高 50', '调整「a」 · 横坐标 40'])
+  })
 }

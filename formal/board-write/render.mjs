@@ -8,7 +8,7 @@ import { HeadlessBrowser, browserCandidates, locateBrowser } from '../../src/hos
 import { screenshot } from '../../src/host/raster.ts'
 
 const out = resolve(process.argv[2] ?? join(tmpdir(), 'dsh-board-writes'))
-const source = await readFile(new URL('./chart.mmd', import.meta.url), 'utf8')
+const source = await readFile(process.argv[3] ?? new URL('./chart.mmd', import.meta.url), 'utf8')
 const diagram = renderDiagram(source)
 if (!diagram.ok) throw new Error(JSON.stringify(diagram.diagnostics))
 const browser = locateBrowser(process.env.CANVAS_BROWSER, browserCandidates(process.platform, process.env, homedir()), existsSync)

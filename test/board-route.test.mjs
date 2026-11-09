@@ -248,7 +248,7 @@ test('new user moves supersede older positions without losing an earlier resize 
   assert.deepEqual((await get()).body, { lost: [] }, 'the user moving again is not a lost update')
   fs.put(PATH, text().replace('"width":320', '"width":280'))
   const [batch] = (await get()).body.lost
-  assert.deepEqual(batch.ops, [{ op: 'place', id: 'why', x: 700, y: 50, width: 320 }])
+  assert.deepEqual(batch.ops, [{ op: 'place', id: 'why', width: 320 }])
 })
 
 test('user deletion and recreation retire old add, edge, geometry and deletion intents', async () => {
@@ -327,4 +327,23 @@ test('F10: nesting beyond 128 containers is a located refusal, never a stack ove
     assert.equal(h.text(), source)
     await assert.rejects(h.check(), /2:135/)
   }
+})
+
+test('F12: a drag retains resize fields under their original batch and replays only those fields', async () => {
+  const before = '{"nodes":[{"id":"a","type":"text","text":"A","x":0,"y":0,"width":100,"height":100}]}'
+  const h = harness({ [PATH]: before })
+  await h.post({ path: PATH, ops: [{ op: 'place', id: 'a', x: 0, y: 0, width: 300, height: 50 }] })
+  h.fs.put(PATH, h.text().replace('"width":300', '"width":500'))
+  const [resize] = (await h.get()).body.lost
+  await h.post({ path: PATH, ops: [{ op: 'place', id: 'a', x: 40, y: 40 }] })
+  const [retained] = (await h.get()).body.lost
+  assert.equal(retained.id, resize.id)
+  assert.equal(retained.at, resize.at)
+  assert.deepEqual(retained.ops, [{ op: 'place', id: 'a', width: 300, height: 50 }])
+  h.fs.put(PATH, h.text().replace('"x":40,"y":40', '"x":60,"y":60'))
+  assert.equal((await h.post({ path: PATH, ops: retained.ops })).status, 200)
+  assert.deepEqual(nodeOf(h.text(), 'a'), { id: 'a', type: 'text', text: 'A', x: 60, y: 60, width: 300, height: 50 })
+  assert.equal((await h.post({ path: PATH, ops: [{ op: 'place', id: 'a' }] })).status, 400, 'empty placement is not an intent')
+  assert.equal((await h.post({ path: PATH, ops: [{ op: 'place', id: 'a', x: 80 }] })).status, 200)
+  assert.equal(nodeOf(h.text(), 'a').y, 60, 'single-field recovery never invents the other coordinate')
 })

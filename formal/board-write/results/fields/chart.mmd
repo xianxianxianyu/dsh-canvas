@@ -1,0 +1,18 @@
+---
+title: "Keep resize recovery attached to its original save"
+---
+stateDiagram-v2
+  s0: Before resize
+  s1: Resize saved at time 1
+  s2: Agent changed width to 500
+  s3: Drag saved at time 2
+  s4: Recoverable resize selected
+  s5: Agent moved to 60,60
+  s6: Resize reapplied without moving the node
+  [*] --> s0
+  s0 --> s1: you resize to 300 by 50
+  s1 --> s2: agent sets width to 500
+  s2 --> s3: you drag to 40,40
+  s3 --> s4: inspect retained fields and batch identity
+  s4 --> s5: agent moves to 60,60
+  s5 --> s6: reapply only the selected retained fields

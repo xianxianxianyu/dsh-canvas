@@ -22,13 +22,15 @@ const cases = [
   ['no-journal', 'NoJournal', ['NoLostAcknowledgedChange', 'NoSilentLoss', 'RecoveryEventually']],
   ['retain-declined', 'RetainDeclined', ['NoLostAcknowledgedChange', 'DeclinedNeverReported']],
   ['chart', 'Chart', []],
+  ['fields', 'Fields', [], ['FieldTypeOK', 'RetainedFieldIdentity', 'RecoveryUsesRetainedFields', 'NoDeadlock']],
+  ['merged-labels', 'MergedLabels', ['RetainedFieldIdentity', 'RecoveryUsesRetainedFields'], ['FieldTypeOK', 'RetainedFieldIdentity', 'RecoveryUsesRetainedFields', 'NoDeadlock']],
 ]
 const summary = []
 await mkdir(out, { recursive: true })
-for (const [name, config, expected] of cases) {
+for (const [name, config, expected, rules = properties] of cases) {
   const destination = join(out, name)
   const result = spawnSync(statechart, [join(model, 'BoardWrite.tla'), '--config', join(model, `${config}.cfg`),
-    '--view', join(model, 'view.ts'), '--out', destination], { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
+    '--view', join(model, rules === properties ? 'view.ts' : 'fields-view.ts'), '--out', destination], { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
   process.stdout.write(result.stdout ?? '')
   process.stderr.write(result.stderr ?? '')
   if (result.error) throw result.error
@@ -38,7 +40,7 @@ for (const [name, config, expected] of cases) {
   const broken = [...report.matchAll(/^## (\w+) breaks$/gm)].map(match => match[1]).sort()
   assert.deepEqual(broken, [...expected].sort(), `${name}: unexpected property results`)
   const held = report.split('## Rules that hold\n')[1]?.trim().split(', ') ?? []
-  assert.deepEqual([...held, ...broken].sort(), [...properties].sort(), `${name}: missing properties`)
+  assert.deepEqual([...held, ...broken].sort(), [...rules].sort(), `${name}: missing properties`)
   summary.push({ case: name, states: report.match(/TLC reached ([\d,]+) states/)?.[1], broken, held })
 }
 // A real-code mutation is loaded from memory. No src/, test/, script or profile changes.
@@ -66,4 +68,4 @@ if (record) {
   await writeFile(join(model, 'results/summary.json'), await readFile(join(out, 'summary.json')))
   await writeFile(join(model, 'results/code-probes.json'), await readFile(join(out, 'code-probes.json')))
 }
-console.log(`Verified both policy modes, six negative controls and real-code probes. Evidence: ${out}`)
+console.log(`Verified both policy modes, field supersession, seven negative controls and real-code probes. Evidence: ${out}`)
