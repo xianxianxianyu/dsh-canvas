@@ -7,7 +7,8 @@
 //   - the canvas-dev port (3996) still listening;
 //   - processes whose command line names the run directory or its Chrome scratch profile
 //     (dev-ui.mjs's chromeProfile(run)): ours by construction, so --clean stops them;
-//   - every session the run recorded in `<run>/sessions.json`, and whether DSH lists it as archived;
+//   - every session the run recorded in `<run>/sessions.json`, and whether canvas-dev's own store
+//     (in dev-ui.mjs's DEV_DATA) lists it as archived;
 //   - the Chrome scratch profile itself (--clean removes it);
 //   - the evidence files, which nothing here ever deletes.
 // Exit status: 0 when nothing is left over and every run still has evidence, 1 otherwise.
@@ -41,7 +42,8 @@ const listener = spawnSync('lsof', ['-nP', '-iTCP:3996', '-sTCP:LISTEN', '-t'], 
 if (listener) report('FAIL', 'port', `3996 still listens (pid ${listener.split('\n').join(', ')}); stop the dev server you started`)
 else report('OK', 'port', '3996 is free')
 
-const archived = archivedIds()
+// Headless runs record no sessions, and canvas-dev's store exists only after its first boot.
+const archived = runs.some(run => runSessions(run).length) ? archivedIds() : new Set()
 
 for (const run of runs) {
   console.log(`-- ${run}`)
@@ -58,7 +60,7 @@ for (const run of runs) {
   if (!ours.length && !clean) report('OK', 'process', 'none name this run')
 
   for (const id of runSessions(run)) {
-    report(archived.has(id) ? 'OK' : 'FAIL', 'session', `${id} ${archived.has(id) ? 'archived' : 'NOT archived: open it again and run ui.archive(tab, run). If it was archived before, another DSH process (doctor.mjs "shared") rewrote workspace.json from a stale copy'}`)
+    report(archived.has(id) ? 'OK' : 'FAIL', 'session', `${id} ${archived.has(id) ? 'archived' : 'NOT archived: open it again and run ui.archive(tab, run)'}`)
   }
 
   // Scratch, not evidence: Chrome's profile for this run.

@@ -19,8 +19,7 @@ The feature map in [`features/`](features/README.md) has one recipe per feature.
 - Run `dsh` with `DSH_HOME` unset and with only `/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin` added to `PATH`; the helpers do this for you. Never put `runtime/bin` on `PATH`: its `node` is an Electron wrapper that breaks `node` in the agent's own bash.
 - The dev UI cannot run side by side. There is one `canvas-dev` profile and one port per machine, shared by every checkout. Drive only a server you started yourself; when `doctor.mjs` shows 3996 taken by a server you did not start, wait or ask, never take it over.
 - Headless runs keep their sessions, storage, attachments and canvas root inside their own run directory, and the Chrome that `canvas_check` starts gets a fresh temporary profile from playwright. The only state they share is the `canvas-e2e` profile, whose composed `cordis.yml` dsh rewrites at every boot. Running them in parallel has not been tried; run them one after another.
-- The dev UI shares its session store and workspace list with the desktop app and with other agents' dev servers (`~/.dsh/sessions`, `~/.dsh/storages/workspace.json`). Every session you create appears in the user's app until you archive it. Rows you did not create belong to the user or another agent: never click them.
-- Each DSH process loads `workspace.json` into memory once, at boot, and rewrites the whole file on every change. storage-json does no cross-process locking: the last write wins. So when canvas-dev archives a session, it drops whatever any other running DSH process archived, pinned or added since canvas-dev booted. In the other direction, the next write from the desktop app or another dev server can un-archive yours. This happened in the phase 0 proof: a canvas-dev archive erased two archives that the town dev server had just made. `doctor.mjs` lists the processes that share the file (`shared`), `ui.archive` throws and names any entries it overwrote, and `leftovers.mjs` re-checks your ids at the end.
+- The dev UI keeps its session store, storages (workspace list, archived and pinned sessions), attachments and canvas root in its own data directory, `DEV_DATA` = `$CANVAS_DEV_DATA` or `~/.cache/dsh-canvas-dev`, never in `~/.dsh`. Each DSH process loads `storages/workspace.json` once, at boot, and rewrites the whole file on every change, with no cross-process lock, so sharing `~/.dsh/storages` with the desktop app would let one side's write erase the other's archives. Its sessions therefore never appear in the user's app; the account credentials in `~/.dsh` are still read, so sign-in works. Rows in the dev UI's tree that your run did not create belong to an earlier run or another agent's run on this profile: never click them.
 
 Paths used below:
 
@@ -37,6 +36,14 @@ Build first: `pnpm install && pnpm build`. DSH loads `lib/`, not `src/`, and `do
 
 - **First run.** It creates `canvas-dev` from DSH's `web` template, sets the default model to `deepseek-flash` through the signed-in DeepSeek account, and links this checkout (`dsh plugin --profile canvas-dev add link:$REPO`).
 - **Later runs.** It reuses the profile. If the profile already links another checkout, it does not relink; `doctor.mjs` reports that.
+- **Every run.** It writes `DEV_DATA/dev.patch.yml` and boots with `--patch` on it. The patch moves the `session-persistence-jsonl` root, the `storage-json` root and `attachment-local.dshHome` into `DEV_DATA` (the rows `run-headless.mjs` moves into a run directory), the `canvas` root to `DEV_DATA/canvas`, and `workspace-controller.documentsDirectory` to `DEV_DATA/documents`, so the first-use 默认工作区 is `DEV_DATA/documents/deepseek-harness/default-workspace` instead of a folder in the user's Documents. Later runs reuse the same data: earlier sessions stay in the tree, archived.
+- **Extra arguments** go to `dsh` after that patch, so a later `--patch` wins. To keep a journey's comments with its evidence, start the server with `--patch $OUT/<run>/canvas-root.patch.yml`, a file holding:
+
+  ```yaml
+  - id: canvas
+    config:
+      root: <absolute path of $OUT/<run>/canvas>
+  ```
 
 In omp, start it as a named service from `$REPO`:
 
@@ -54,7 +61,7 @@ const url = (await read('proc://canvas-dev-3996')).match(/dsh web: (http\S+)/)[1
 
 Never paste that URL into committed files.
 
-The listener is the DSH Electron binary running with `--profile canvas-dev --no-open --port 3996`. The script `exec`s it, so the service pid is the listener.
+The listener is the DSH Electron binary running with `--profile canvas-dev --patch DEV_DATA/dev.patch.yml … --no-open --port 3996`. The script `exec`s it, so the service pid is the listener.
 
 In another harness, run the script in the background and keep its pid.
 
@@ -84,7 +91,7 @@ node $SKILL/scripts/doctor.mjs            # add --no-live to skip the model call
 | `build` | `lib/` is newer than every file in `src/` | `pnpm build` |
 | `link` | `canvas-dev` and `canvas-e2e` both resolve `dsh-canvas` to this checkout (WARN: the profile is missing and will be created) | `dsh plugin --profile <p> add link:$REPO`, on purpose |
 | `port` | 3996 is free, or a `--profile canvas-dev` server holds it | anything else on 3996 is not ours: stop |
-| `shared` | no other DSH host (the desktop app, another dev profile) holds `workspace.json` (WARN lists those that do) | not a failure. Expect archives to race with them; read the `ui.archive` and `leftovers.mjs` results |
+| `data` | `DEV_DATA` is where canvas-dev keeps its stores; a running canvas-dev listener carries `--patch DEV_DATA/dev.patch.yml` | the listener was started without the patch (an older `dev-server.sh`, or another `CANVAS_DEV_DATA`) and shares `~/.dsh` with the desktop app: its owner stops it and restarts it with `scripts/dev-server.sh` |
 | `browser` | the Chrome or Edge that `canvas_check` will use, found by the plugin's own `src/host/browser.ts` | install Chrome; without it only `check-no-browser` and `check-text-only` can run |
 | `auth` | a one-line headless turn (`只回复 OK…`) completed through the account | `ACCOUNT_SIGN_IN_REQUIRED`: sign in once in the desktop app |
 
@@ -130,7 +137,7 @@ The full journey is in [`features/diagram-preview.md`](features/diagram-preview.
 | Current session row | CSS `[role="treeitem"][aria-selected="true"][data-row-key^="session:"]`. `data-row-key` is `session:<id>`, which is how `ui.currentSession` reads the id. The accessible name is the title plus a relative time (`刚刚`, `1分钟`), and hovering adds action text, so never match rows by name |
 | Row menu | right-click the row: `置顶会话`, `重命名`, `分叉会话`, `复制 Session ID`, `在 Finder 中显示`, `归档会话` |
 | Blank session | title `新会话`. It has no row menu; Meta+Alt+A archives it |
-| Archived | toast `会话已归档，可撤销或筛选已归档会话`. The id joins `global.archivedSessionIds` in `~/.dsh/storages/workspace.json` |
+| Archived | toast `会话已归档，可撤销或筛选已归档会话`. The id joins `global.archivedSessionIds` in `DEV_DATA/storages/workspace.json` |
 
 ## Evidence
 
@@ -167,13 +174,13 @@ Proof standards:
 
 Do these in order after every journey, including failed attempts:
 
-1. **Archive what the run created.** In the UI, `await ui.archive(tab, run)` archives the session on screen and returns its id once the store lists it as archived. A conversation goes through its row menu (归档会话); a blank `新会话` goes through Meta+Alt+A. It refuses any session missing from `<run>/sessions.json`, so it cannot archive a session that belongs to the user or another agent. Log the id in `journey.log`. When it throws with `overwrote another process's changes`, your archive still landed but erased the listed entries. Tell their owner (`doctor.mjs` names the processes) and record it in the trail.
+1. **Archive what the run created.** In the UI, `await ui.archive(tab, run)` archives the session on screen and returns its id once canvas-dev's store (`DEV_DATA/storages/workspace.json`) lists it as archived. A conversation goes through its row menu (归档会话); a blank `新会话` goes through Meta+Alt+A. It refuses any session missing from `<run>/sessions.json`, so it cannot archive a session another run created. Log the id in `journey.log`.
 2. **Close your browser:** `await browser.close({ name: 'canvas-dev', kill: true })`.
 3. **Stop the dev server you started:** `write proc://canvas-dev-3996/kill` (outside omp, `kill <the pid you kept>`).
 4. **Clean up:** `node $SKILL/scripts/leftovers.mjs --clean $OUT/<run> …` stops processes whose command line names a run directory or its Chrome profile (they are ours by construction), removes that profile, and reports every session in `sessions.json` that is not archived. Pass run directories only (`ls -d $OUT/*/` lists exactly those).
 5. **Prove it:** `node $SKILL/scripts/leftovers.mjs $OUT/<run> …` must exit 0. It shows 3996 free, nothing running, every new session archived, and the evidence files listed. Then the cleanup is done and the proof survived it.
 
-Headless runs need no teardown: dsh exits, and the Chrome that `canvas_check` launched closes with it. Never delete `$OUT`, never remove the `canvas-dev` or `canvas-e2e` profiles (later runs reuse them), and never kill `DeepSeek Harness` or `Google Chrome` by name: those are the user's apps.
+Headless runs need no teardown: dsh exits, and the Chrome that `canvas_check` launched closes with it. Never delete `$OUT`, never remove the `canvas-dev` or `canvas-e2e` profiles or `DEV_DATA` (later runs reuse them, and journey logs point at the sessions in `DEV_DATA/sessions`), and never kill `DeepSeek Harness` or `Google Chrome` by name: those are the user's apps.
 
 ## Helpers
 
@@ -183,5 +190,5 @@ All helpers live in `$SKILL/scripts/` and need Node 22.18 or later: `doctor.mjs`
 |---|---|---|---|
 | `doctor.mjs` | `node $SKILL/scripts/doctor.mjs [--no-live]` | the readiness checks above | 0 ready, 1 not |
 | `run-headless.mjs` | `node $SKILL/scripts/run-headless.mjs [--model m] [--no-browser] [--name run] [--timeout s] <prompt \| ->` | one headless turn in `$OUT/<run>`; prints the session id and every `canvas_check` result | 0 completed, 1 not, 2 usage or setup |
-| `dev-ui.mjs` | `const ui = await import('$SKILL/scripts/dev-ui.mjs')` in an omp JS eval | `open`, `send`, `previewFile`, `sidebar`, `waitForSidebar`, `rendererMenu`, `chooseRenderer`, `shot`, `currentSession`, `archive`, `runSessions`, `archivedIds`, `chromeProfile`, and `SEL` (the handles) | throws with the step that timed out |
+| `dev-ui.mjs` | `const ui = await import('$SKILL/scripts/dev-ui.mjs')` in an omp JS eval | `open`, `send`, `previewFile`, `sidebar`, `waitForSidebar`, `rendererMenu`, `chooseRenderer`, `shot`, `currentSession`, `archive`, `runSessions`, `archivedIds`, `chromeProfile`, `DEV_DATA`, and `SEL` (the handles) | throws with the step that timed out |
 | `leftovers.mjs` | `node $SKILL/scripts/leftovers.mjs [--clean] <run-dir>…` | the cleanup report, and with `--clean` the cleanup itself | 0 clean, 1 something left |

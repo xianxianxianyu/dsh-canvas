@@ -47,6 +47,6 @@ Steps:
 - The chat header can also show an `打开方式` button, whose menu holds 访达, Xcode and 终端. Use the sidebar-scoped `SEL.rendererMenu`.
 - Every page load creates a blank persisted `新会话` in the selected workspace. Load pages only through `ui.open`, which records that session; never use `tab.goto` or a reload. Send your prompt into the blank session, or archive it with `ui.archive(tab, run)`.
 - After archiving, the composer reads `选择一个工作区开始` until the page reloads, and reloading makes another blank session.
-- Other agents' dev servers share the session store and workspace list, so their sessions show up in this tree too. Act only on `SEL.currentRow` after `ui.open`, never on a row found by name. Hovering a row adds its action buttons to its name, and 归档会话 is among them.
+- The tree lists every unarchived session in canvas-dev's own store (`DEV_DATA`), including those of an earlier or concurrent run on this profile. Act only on `SEL.currentRow` after `ui.open`, never on a row found by name. Hovering a row adds its action buttons to its name, and 归档会话 is among them.
 - `browser.open`'s `viewport` option was ignored (756×469); `ui.open` sets 1600×1000 with `emulate`. Below roughly 1000 px wide, the left tree collapses.
 - The model sometimes adds `s4 --> [*]` or classes of its own. Assert the labels from the prompt, not an exact source.

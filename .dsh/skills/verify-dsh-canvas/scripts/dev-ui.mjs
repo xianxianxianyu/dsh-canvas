@@ -10,9 +10,17 @@
 
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 
 export const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+
+/**
+ * canvas-dev's own data directory, which scripts/dev-server.sh points its session store, storages,
+ * attachments and canvas root at (same default, same variable). Nothing there is shared with the
+ * desktop app or another profile.
+ */
+export const DEV_DATA = resolve(process.env.CANVAS_DEV_DATA || join(homedir(), '.cache', 'dsh-canvas-dev'))
 
 export const SEL = {
   /** 预览版说明: shown once per profile until 继续 is pressed. */
@@ -159,41 +167,25 @@ export async function shot(tab, file) {
   return file
 }
 
-/** DSH's shared workspace store; every DSH process on this machine reads it once and rewrites it whole. */
-function workspaceStore(home = process.env.HOME) {
-  return JSON.parse(readFileSync(join(home, '.dsh', 'storages', 'workspace.json'), 'utf8'))
-}
-
-/** Ids in DSH's archived-session list, kept in the store every profile on this machine shares. */
-export function archivedIds(home = process.env.HOME) {
-  return new Set(workspaceStore(home).global.archivedSessionIds)
+/** Ids in the archived-session list of canvas-dev's own workspace store. */
+export function archivedIds(data = DEV_DATA) {
+  return new Set(JSON.parse(readFileSync(join(data, 'storages', 'workspace.json'), 'utf8')).global.archivedSessionIds)
 }
 
 /**
- * Archive the session on screen and wait until DSH stores it as archived; returns its id. A
+ * Archive the session on screen and wait until canvas-dev stores it as archived; returns its id. A
  * conversation is archived from its row menu (right-click → 归档会话); a blank 新会话 has no row
  * menu and is archived with Meta+Alt+A. Refuses a session this run did not record.
- *
- * storage-json keeps workspace.json in memory from each process's boot and rewrites it whole, with
- * no cross-process lock, so this server's write drops whatever another DSH process (the desktop
- * app, another dev server) archived, pinned or added since this server booted. The archive is
- * compared against the store just before it and throws, naming every lost entry, when that happened.
  */
 export async function archive(tab, run) {
   const { id, title } = await currentSession(tab)
   if (!runSessions(run).includes(id)) throw new Error(`dev-ui: ${id} (${title}) is not in ${run}/sessions.json; this run did not create it`)
-  const before = workspaceStore().global
   if (title === '新会话') await tab.press('Meta+Alt+A')
   else {
     await tab.click(`${SEL.currentRow}`, { button: 'right' })
     const entry = await poll('the 归档会话 menu item', async () => (await elements(tab)).find(e => e.role === 'menuitem' && e.name === '归档会话'), 5000, 200)
     await tab.id(entry.id).click()
   }
-  const after = await poll(`${id} in archivedSessionIds`, () => { const global = workspaceStore().global; return global.archivedSessionIds.includes(id) && global }, 10_000, 500)
-  const lost = ['archivedSessionIds', 'pinnedSessionIds', 'workspaceIds']
-    .flatMap(key => (before[key] ?? []).filter(entry => entry !== id && !(after[key] ?? []).includes(entry)).map(entry => `${key}: ${entry}`))
-  if (lost.length) {
-    throw new Error(`dev-ui: archived ${id}, but this server's stale copy of workspace.json overwrote another process's changes; tell their owner to redo them:\n  ${lost.join('\n  ')}`)
-  }
+  await poll(`${id} in archivedSessionIds`, () => archivedIds().has(id), 10_000, 500)
   return id
 }

@@ -11,6 +11,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { DEV_DATA } from './dev-ui.mjs'
 import { DSH_BIN, OUT, PROFILE, REPO, dshEnv, linkState } from './run-headless.mjs'
 
 const DEV_PROFILE = 'canvas-dev'
@@ -67,25 +68,25 @@ for (const [name, creator] of [[DEV_PROFILE, 'scripts/dev-server.sh'], [PROFILE,
 }
 
 // 4. Port 3996 must be free, or held by a canvas-dev server; anything else is not ours to drive.
+// 4b. canvas-dev keeps its session store, storages, attachments and canvas root in DEV_DATA, through
+// the dev.patch.yml that scripts/dev-server.sh writes there. Every DSH process loads
+// storages/workspace.json once and rewrites it whole, so a canvas-dev server booted without that
+// patch (an older dev-server.sh) shares ~/.dsh with the desktop app and loses one side's updates.
+const devPatch = `--patch ${join(DEV_DATA, 'dev.patch.yml')}`
 const listener = spawnSync('lsof', ['-nP', `-iTCP:${DEV_PORT}`, '-sTCP:LISTEN', '-t'], { encoding: 'utf8' }).stdout.trim().split('\n').filter(Boolean)
-if (!listener.length) report('OK', 'port', `${DEV_PORT} is free`)
-else {
+if (!listener.length) {
+  report('OK', 'port', `${DEV_PORT} is free`)
+  report('OK', 'data', `scripts/dev-server.sh keeps canvas-dev's sessions, storages, attachments and canvas root in ${DEV_DATA} (CANVAS_DEV_DATA), not ~/.dsh`)
+} else {
   for (const pid of listener) {
     const chain = processChain(Number(pid))
     const ours = chain.some(({ command }) => command.includes(`--profile ${DEV_PROFILE}`))
     report(ours ? 'OK' : 'FAIL', 'port', `${DEV_PORT} is held by pid ${pid}${ours ? ` (a ${DEV_PROFILE} server; drive it only if you started it)` : ''}: ${chain[0]?.command.slice(0, 160)}`)
+    if (!ours) continue
+    if (chain.some(({ command }) => command.includes(devPatch))) report('OK', 'data', `pid ${pid} keeps its stores in ${DEV_DATA}`)
+    else report('FAIL', 'data', `pid ${pid} runs without ${devPatch}, so it shares ~/.dsh/sessions and ~/.dsh/storages with the desktop app; whoever started it should stop it and restart with scripts/dev-server.sh`)
   }
 }
-
-// 4b. Every DSH host process keeps ~/.dsh/storages/workspace.json in memory from its boot and
-// rewrites it whole (storage-json: no cross-process lock, last write wins). Archives made in
-// canvas-dev can be undone by the next write of any process listed here, and the reverse.
-const hosts = spawnSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8' }).stdout.split('\n')
-  .map(line => /^\s*(\d+)\s+(.*dsh-desktop-host\/lib\/(\S+)\.js.*)$/.exec(line)).filter(Boolean)
-  .map(([, pid, command, entry]) => ({ pid, profile: /--profile (\S+)/.exec(command)?.[1] ?? (entry === 'index' ? 'desktop app' : entry) }))
-  .filter(host => host.profile !== DEV_PROFILE)
-if (!hosts.length) report('OK', 'shared', 'no other DSH host shares ~/.dsh/storages/workspace.json')
-else report('WARN', 'shared', `workspace.json is also held in memory by ${hosts.map(host => `${host.profile} (pid ${host.pid})`).join(', ')}: an archive written by either side can be undone by the other's next write; ui.archive names entries it overwrote, leftovers.mjs re-checks yours`)
 
 // 5. The browser canvas_check will use, found by the plugin's own discovery code.
 const { browserCandidates, locateBrowser } = await import(join(REPO, 'src/host/browser.ts'))
