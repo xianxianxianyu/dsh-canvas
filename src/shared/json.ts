@@ -41,6 +41,8 @@ class SyntaxProblem {
 
 const NUMBER = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y
 const LITERALS = [['true', true], ['false', false], ['null', null]] as const
+/** Bound every parsed tree (including unknown metadata), keeping parser and consumers stack-safe. */
+export const MAX_JSON_DEPTH = 128
 
 /** The comma just before `at` (whitespace between), so a trailing comma is reported where it is. */
 function commaBefore(text: string, at: number): number {
@@ -82,10 +84,11 @@ export function parseJson(text: string): JsonParse {
     return { kind: 'string', start, end: at, value: JSON.parse(text.slice(start, at)) as string }
   }
 
-  const value = (): JsonNode => {
+  const value = (depth = 0): JsonNode => {
     space()
     const start = at
     const char = text[at]
+    if ((char === '{' || char === '[') && depth >= MAX_JSON_DEPTH) fail(`嵌套不能超过 ${MAX_JSON_DEPTH} 层`, start)
     if (char === '{') {
       at++
       const members: JsonMember[] = []
@@ -101,7 +104,7 @@ export function parseJson(text: string): JsonParse {
         space()
         if (text[at] !== ':') fail('键后面应该是 :')
         at++
-        members.push({ key: key.value, keySpan: { start: key.start, end: key.end }, value: value() })
+        members.push({ key: key.value, keySpan: { start: key.start, end: key.end }, value: value(depth + 1) })
         space()
         if (text[at] === ',') { at++; continue }
         if (text[at] === '}') return { kind: 'object', start, end: ++at, members }
@@ -116,7 +119,7 @@ export function parseJson(text: string): JsonParse {
       for (;;) {
         space()
         if (items.length && text[at] === ']') fail('最后一项后面多了 ,', commaBefore(text, at))
-        items.push(value())
+        items.push(value(depth + 1))
         space()
         if (text[at] === ',') { at++; continue }
         if (text[at] === ']') return { kind: 'array', start, end: ++at, items }

@@ -311,3 +311,20 @@ test('F6: non-finite JSON numbers are located errors through parser, route and c
     await assert.rejects(h.check(), /2:49/)
   }
 })
+
+test('F10: nesting beyond 128 containers is a located refusal, never a stack overflow', async () => {
+  assert.equal(parseBoard('{"meta":' + '['.repeat(127) + '0' + ']'.repeat(127) + '}').ok, true)
+  for (const depth of [128, 5000]) {
+    const source = '{\n"meta":' + '['.repeat(depth) + '0' + ']'.repeat(depth) + '}'
+    const parsed = parseBoard(source)
+    assert.equal(parsed.ok, false)
+    assert.match(parsed.diagnostics[0].message, /128/)
+    assert.equal(parsed.diagnostics[0].line, 2)
+    assert.equal(parsed.diagnostics[0].column, 135)
+    const h = harness({ [PATH]: source })
+    assert.equal((await h.get()).status, 409)
+    assert.equal((await h.post({ path: PATH, ops: [{ op: 'place', id: 'a', x: 1, y: 2 }] })).status, 409)
+    assert.equal(h.text(), source)
+    await assert.rejects(h.check(), /2:135/)
+  }
+})

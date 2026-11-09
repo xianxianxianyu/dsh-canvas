@@ -189,6 +189,9 @@ values and integer spellings outside JavaScript's exact-integer range. Only chan
 fields are serialized; prototype-member names never select a change implicitly.
 The JSON boundary rejects non-finite numbers, including overflowing exponents,
 with their source location before geometry or write operations run.
+Board JSON allows at most **128 nested containers**, counting the root object and
+all arrays/objects in extension metadata. The first excessive opening bracket is
+a located error. This bound also keeps accepted trees safe for recursive consumers.
 
 ## Limits
 
