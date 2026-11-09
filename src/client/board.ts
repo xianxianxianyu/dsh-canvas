@@ -57,7 +57,7 @@ export function useBoard(address: string, visible: boolean, runtime: BoardRuntim
   latest.current = load
   const sending = useRef(false)
   const refreshRef = useRef<() => Promise<void>>(async () => {})
-  const lossRef = useRef<() => Promise<void>>(async () => {})
+  const lossesGeneration = useRef(0)
   const lifetimeRef = useRef<AbortController>()
 
   useEffect(() => {
@@ -72,24 +72,24 @@ export function useBoard(address: string, visible: boolean, runtime: BoardRuntim
     let reading: AbortController | undefined
     let generation = 0
     let contentKey: string | undefined
-    let lossesGeneration = 0
+    let lossVersion: string | undefined
+    let sourceVersion: string | undefined
     const bodyTarget = { sessionId: target.sessionId, path: target.path }
     const pollLost = async (): Promise<void> => {
-      const current = ++lossesGeneration
+      const current = ++lossesGeneration.current
       try {
         const response = await fetch(`api/canvas/board?${new URLSearchParams(bodyTarget)}`, { cache: 'no-store', signal: lifetime.signal })
         const body = await response.json() as { readonly lost: readonly LostBatch[] } | RouteFailure
-        if (lifetime.signal.aborted || current !== lossesGeneration) return
+        if (lifetime.signal.aborted || current !== lossesGeneration.current) return
         if (response.ok && 'lost' in body) setLost(body.lost)
         else if ('error' in body && body.error === 'invalid-source') {
           setLoad({ kind: 'invalid-source', diagnostics: body.diagnostics ?? [] })
           setLost([])
-        } else if (!response.ok && 'error' in body) setError(failureMessage(body, response.status))
+        } else if (!response.ok && 'error' in body) { lossVersion = undefined; setError(failureMessage(body, response.status)) }
       } catch (error) {
-        if (!lifetime.signal.aborted) setError(messageOf(error))
+        if (!lifetime.signal.aborted && current === lossesGeneration.current) { lossVersion = undefined; setError(messageOf(error)) }
       }
     }
-    lossRef.current = pollLost
     const watch = (addresses: readonly string[]): void => {
       const retained = new Set([address, ...addresses])
       for (const [key, release] of watches) if (!retained.has(key)) { release(); watches.delete(key) }
@@ -100,9 +100,8 @@ export function useBoard(address: string, visible: boolean, runtime: BoardRuntim
         }))
       }
     }
-    const refresh = async (): Promise<void> => {
+    const refresh = async (onlyChanged = false): Promise<void> => {
       if (lifetime.signal.aborted) return
-      lossesGeneration++
       const current = ++generation
       reading?.abort()
       const request = new AbortController()
@@ -118,11 +117,15 @@ export function useBoard(address: string, visible: boolean, runtime: BoardRuntim
           return
         }
         readComplete = true
+        if (onlyChanged && read.value.version === sourceVersion) return
+        sourceVersion = read.value.version
         const source = new TextDecoder().decode(read.value.data)
         const next = reconcile(source)
         // Even an identical source after a refused operation retires optimistic gesture coordinates.
         setLoad(next.kind === 'ready' ? { ...next, revision: current } : next)
         if (next.kind !== 'ready') {
+          lossesGeneration.current++
+          lossVersion = undefined
           contentKey = undefined
           setContents(new Map())
           setDiagnostics([])
@@ -132,7 +135,10 @@ export function useBoard(address: string, visible: boolean, runtime: BoardRuntim
         }
         const dependencies = next.board.nodes.flatMap(node => node.type === 'file' ? [sessionFileAddress(target.sessionId, embedOf(read.value.absolutePath, node.file).path)] : [])
         watch(dependencies)
-        void pollLost()
+        if (read.value.version !== lossVersion) {
+          lossVersion = read.value.version
+          void pollLost()
+        }
         // Geometry is rendered responsively in shared node pages; dragging/resizing does not re-read embeds.
         const key = JSON.stringify(next.board.nodes.map(({ x: _x, y: _y, width: _w, height: _h, ...node }) => node))
         if (key !== contentKey) {
@@ -159,7 +165,7 @@ export function useBoard(address: string, visible: boolean, runtime: BoardRuntim
     refreshRef.current = refresh
     watch([])
     void refresh()
-    const timer = setInterval(() => { if (active.current && document.visibilityState === 'visible') void pollLost() }, 3000)
+    const timer = setInterval(() => { if (active.current && document.visibilityState === 'visible') void refresh(true) }, 3000)
     return () => {
       mounted.current = false
       lifetime.abort()
@@ -169,7 +175,7 @@ export function useBoard(address: string, visible: boolean, runtime: BoardRuntim
     }
   }, [address, target, runtime.readFile, runtime.watchFile])
 
-  useEffect(() => { if (visible) void lossRef.current() }, [visible])
+  useEffect(() => { if (visible) void refreshRef.current() }, [visible])
   const refresh = useCallback(() => refreshRef.current(), [])
   const submit = useCallback(async (ops: readonly BoardOp[]): Promise<boolean> => {
     if (sending.current || latest.current.kind !== 'ready' || target?.scope !== 'session' || !ops.length) return false
@@ -221,12 +227,13 @@ export function useBoard(address: string, visible: boolean, runtime: BoardRuntim
       })
       const body = await response.json() as { readonly declined: readonly string[] } | RouteFailure
       if (!response.ok || !('declined' in body)) throw new Error(failureMessage(body as RouteFailure, response.status))
+      lossesGeneration.current++
+      setLost(prior => prior.filter(batch => !body.declined.includes(batch.id)))
     } catch (error) {
       if (mounted.current) setError(messageOf(error))
     } finally {
       if (mounted.current) {
-        // The host owns recovery choices. Never hide a batch until its journal confirms removal.
-        await lossRef.current()
+        // The confirmed response retires only these batches; no unchanged-file loss poll is needed.
         setSaving(false)
       }
       sending.current = false

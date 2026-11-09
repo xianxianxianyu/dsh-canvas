@@ -154,3 +154,37 @@ test('F4: untouched extension members retain prototype names and multiline numer
     assert.equal(applied(result.text, [{ op: 'place', id: 'n', x: 1, y: 2 }]).text, result.text)
   }
 })
+
+test('batched field edits retain sequential statuses across repeats, conflicts and structural boundaries', () => {
+  const source = '{"nodes":[{"id":"a","type":"text","text":"old","x":0,"y":0,"width":100,"height":100}]}'
+  const result = applied(source, [
+    { op: 'place', id: 'a', x: 10, y: 20 },
+    { op: 'place', id: 'a', x: 10, y: 20 },
+    { op: 'setText', id: 'a', ifText: 'old', text: 'middle' },
+    { op: 'setText', id: 'a', ifText: 'old', text: 'stale' },
+    { op: 'setText', id: 'a', ifText: 'middle', text: 'last' },
+    { op: 'removeNodes', ids: ['a'] },
+    { op: 'place', id: 'a', x: 99 },
+    { op: 'addNote', id: 'a', text: 'new', x: 0, y: 0, width: 100, height: 100 },
+    { op: 'place', id: 'a', width: 300 },
+  ])
+  assert.deepEqual(result.statuses, ['applied', 'unchanged', 'applied', 'conflict', 'applied', 'applied', 'missing', 'applied', 'applied'])
+  assert.deepEqual(JSON.parse(result.text).nodes, [{ id: 'a', type: 'text', text: 'new', x: 0, y: 0, width: 300, height: 100 }])
+})
+
+test('bulk removal keeps all surviving values and removes exactly incident edges for every subset', () => {
+  const nodes = Array.from({ length: 6 }, (_, i) => ({ id: String(i), type: 'text', text: `note ${i}`, x: i, y: 0, width: 100, height: 100 }))
+  const edges = nodes.slice(1).map((node, i) => ({ id: `e${i}`, fromNode: String(i), toNode: node.id }))
+  const source = JSON.stringify({ nodes, edges, custom: 'kept' }, null, 2)
+  for (let mask = 1; mask < 64; mask++) {
+    const ids = nodes.filter((_, i) => mask & (1 << i)).map(node => node.id)
+    const result = applied(source, [{ op: 'removeNodes', ids }])
+    assert.deepEqual(JSON.parse(result.text), {
+      nodes: nodes.filter(node => !ids.includes(node.id)),
+      edges: edges.filter(edge => !ids.includes(edge.fromNode) && !ids.includes(edge.toNode)),
+      custom: 'kept',
+    })
+    assert.deepEqual(result.statuses, ['applied'])
+    assert.deepEqual(applied(result.text, [{ op: 'removeNodes', ids }]).statuses, ['unchanged'])
+  }
+})

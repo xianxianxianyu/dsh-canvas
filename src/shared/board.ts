@@ -4,7 +4,7 @@
  * every painter shares. Pure; the host and the client both use it.
  */
 import { measureLabel } from './diagram.ts'
-import { locate, parseJson, type JsonMember, type JsonNode } from './json.ts'
+import { sourceLocator, parseJson, type SourceLocator, type JsonMember, type JsonNode } from './json.ts'
 import { modeOf, type ModeId } from './modes.ts'
 import type { Diagnostic } from './report.ts'
 
@@ -72,11 +72,6 @@ export interface ValidBoard {
 
 export type ParsedBoard = ValidBoard | { readonly ok: false; readonly diagnostics: readonly Diagnostic[] }
 
-/** The `line:column` and snippet of an offset, as a diagnostic. */
-export function diagnosticAt(text: string, offset: number, severity: Diagnostic['severity'], message: string): Diagnostic {
-  return { severity, message, ...locate(text, offset) }
-}
-
 /**
  * Parse and validate a board. Only valid boards come back `ok`; every problem is reported, each at
  * the value that is wrong. Unknown fields are allowed and kept in the text.
@@ -84,14 +79,17 @@ export function diagnosticAt(text: string, offset: number, severity: Diagnostic[
  * @returns the board, its layout and layout warnings, or the errors.
  */
 export function parseBoard(text: string): ParsedBoard {
-  if (!text.trim()) return { ok: false, diagnostics: [diagnosticAt(text, 0, 'error', '画板文件是空的')] }
+  const locate = sourceLocator(text)
+  const diagnosticAt = (offset: number, severity: Diagnostic['severity'], message: string): Diagnostic =>
+    ({ severity, message, ...locate(offset) })
+  if (!text.trim()) return { ok: false, diagnostics: [diagnosticAt(0, 'error', '画板文件是空的')] }
   const json = parseJson(text)
-  if (!json.ok) return { ok: false, diagnostics: [diagnosticAt(text, json.offset, 'error', json.message)] }
+  if (!json.ok) return { ok: false, diagnostics: [diagnosticAt(json.offset, 'error', json.message)] }
   const problems: { readonly offset: number; readonly message: string }[] = []
   const problem = (offset: number, message: string): void => { problems.push({ offset, message }) }
 
   const { root } = json
-  if (root.kind !== 'object') return { ok: false, diagnostics: [diagnosticAt(text, root.start, 'error', '画板的最外层必须是对象：{ "nodes": [...], "edges": [...] }')] }
+  if (root.kind !== 'object') return { ok: false, diagnostics: [diagnosticAt(root.start, 'error', '画板的最外层必须是对象：{ "nodes": [...], "edges": [...] }')] }
   const rootFields = fieldsOf(root, '最外层', problem)
   const arrayOf = (key: 'nodes' | 'edges'): { member: JsonMember; array: JsonArray } | undefined => {
     const member = rootFields.get(key)
@@ -117,7 +115,7 @@ export function parseBoard(text: string): ParsedBoard {
     else {
       id = idField.value.value
       const earlier = elements.get(id)
-      if (earlier !== undefined) problem(idField.value.start, `id "${id}" 重复（第 ${locate(text, earlier.start).line} 行已经用过）`)
+      if (earlier !== undefined) problem(idField.value.start, `id "${id}" 重复（第 ${locate(earlier.start).line} 行已经用过）`)
       else elements.set(id, item)
     }
     const name = `${kind} ${id ?? `（${where}）`}`
@@ -178,10 +176,10 @@ export function parseBoard(text: string): ParsedBoard {
 
   if (problems.length) {
     const sorted = problems.map((entry, order) => ({ ...entry, order })).sort((a, b) => a.offset - b.offset || a.order - b.order)
-    return { ok: false, diagnostics: sorted.map(entry => diagnosticAt(text, entry.offset, 'error', entry.message)) }
+    return { ok: false, diagnostics: sorted.map(entry => diagnosticAt(entry.offset, 'error', entry.message)) }
   }
   const layout: BoardLayout = { root, ...nodesAt ? { nodes: nodesAt } : {}, ...edgesAt ? { edges: edgesAt } : {}, elements }
-  return { ok: true, board: { nodes, edges }, layout, warnings: layoutWarnings(text, layout, nodeIds) }
+  return { ok: true, board: { nodes, edges }, layout, warnings: layoutWarnings(locate, layout, nodeIds) }
 }
 
 type Fields = ReadonlyMap<string, JsonMember>
@@ -241,15 +239,15 @@ function definedOnly<T extends object>(value: T): T {
 }
 
 /** One warning when elements do not sit one per line: the route still edits them, but a drag no longer changes one line. */
-function layoutWarnings(text: string, layout: BoardLayout, nodeIds: ReadonlySet<string>): Diagnostic[] {
-  const spans = [...layout.elements].map(([id, object]) => ({ id, start: locate(text, object.start).line, end: locate(text, object.end - 1).line, offset: object.start }))
+function layoutWarnings(locate: SourceLocator, layout: BoardLayout, nodeIds: ReadonlySet<string>): Diagnostic[] {
+  const spans = [...layout.elements].map(([id, object]) => ({ id, start: locate(object.start).line, end: locate(object.end - 1).line, offset: object.start }))
   const perLine = new Map<number, number>()
   for (const span of spans) perLine.set(span.start, (perLine.get(span.start) ?? 0) + 1)
   for (const span of spans) if (span.end !== span.start) perLine.set(span.end, (perLine.get(span.end) ?? 0) + 1)
   const crowded = spans.filter(span => span.start !== span.end || perLine.get(span.start)! > 1).sort((a, b) => a.offset - b.offset)
   if (!crowded.length) return []
   const first = crowded[0]!
-  const { line, column } = locate(text, first.offset)
+  const { line, column } = locate(first.offset)
   return [{
     severity: 'warning', line, column,
     message: `${crowded.length} 个元素没有各占一行（第一个是${nodeIds.has(first.id) ? '节点' : '连线'} ${first.id}）；规范格式是每个节点、每条连线各占一行，界面拖动时只改那一行`,

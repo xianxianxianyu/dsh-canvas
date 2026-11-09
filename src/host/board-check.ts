@@ -6,7 +6,7 @@
 import { dirname } from 'node:path'
 import { FILE_NODE, NOTE_TEXT, embedOf, imageType, noteHeight, parseBoard, scene, type Board, type BoardNode, type FileNode, type Scene } from '../shared/board.ts'
 import { renderDiagram } from '../shared/diagram.ts'
-import { locate } from '../shared/json.ts'
+import { sourceLocator } from '../shared/json.ts'
 import { markdownHtml } from '../shared/markdown.ts'
 import { boardPageHtml, type BoardContent } from '../shared/page.ts'
 import type { Diagnostic } from '../shared/report.ts'
@@ -123,12 +123,13 @@ export async function prepareBoard(source: string, context: BoardReadContext): P
   const parsed = parseBoard(source)
   if (!parsed.ok) return parsed
   const { board, layout } = parsed
+  const locate = sourceLocator(source)
   const layoutOf = scene(board)
   const diagnostics: Diagnostic[] = [...parsed.warnings]
   const contents = new Map<string, BoardContent>()
   const lines: string[] = []
   for (const node of board.nodes) {
-    const { line, column } = locate(source, layout.elements.get(node.id)!.start)
+    const { line, column } = locate(layout.elements.get(node.id)!.start)
     const at = (severity: Diagnostic['severity'], message: string): Diagnostic => ({ severity, message, line, column })
     if (node.type === 'file') {
       const embedded = await embed(context, node)

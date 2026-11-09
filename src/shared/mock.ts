@@ -1,5 +1,5 @@
 import { parse, serializeOuter, type DefaultTreeAdapterTypes as Tree } from 'parse5'
-import { locate } from './json.ts'
+import { sourceLocator } from './json.ts'
 import type { Diagnostic } from './report.ts'
 
 export interface MockViewport { readonly width: number; readonly height: number }
@@ -35,9 +35,10 @@ function viewportOf(value: string): MockViewport | undefined {
 
 /** HTML5 parsing, source diagnostics and stripping share one tree on the host and client. */
 export function parseMock(source: string): MockOutcome {
+  const locate = sourceLocator(source)
   const diagnostics: Diagnostic[] = []
   const issue = (severity: Diagnostic['severity'], message: string, offset = 0): void => {
-    diagnostics.push({ severity, message, ...locate(source, offset) })
+    diagnostics.push({ severity, message, ...locate(offset) })
   }
   const tree = parse(source, {
     sourceCodeLocationInfo: true,
@@ -70,7 +71,7 @@ export function parseMock(source: string): MockOutcome {
       const at = (name: string): number => node.sourceCodeLocation?.attrs?.[name]?.startOffset ?? offset
       const id = attr('id')
       if (id) {
-        if (ids.has(id)) issue('error', `重复 id「${id}」（第一次在第 ${locate(source, ids.get(id)!).line} 行）`, at('id'))
+        if (ids.has(id)) issue('error', `重复 id「${id}」（第一次在第 ${locate(ids.get(id)!).line} 行）`, at('id'))
         else ids.set(id, at('id'))
       }
       if (tag === 'meta' && attr('name')?.toLowerCase() === 'canvas-viewport') declareViewport(attr('content') ?? '', at('content'))

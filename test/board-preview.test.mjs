@@ -525,3 +525,18 @@ test('mounted diagram pages are sandboxed and share exact node, edge, label and 
     assert.equal(await page.evaluate(() => window.posts.length), 0, 'an embed watch refreshes content without mutating the board')
   })
 })
+
+test('F3: loss requests follow board versions, not idle polls or embed-only updates', { skip }, async () => {
+  await withBoard(async page => {
+    const before = await page.evaluate(() => window.lossReads)
+    await page.clock.fastForward(10_000)
+    await frames(page)
+    assert.equal(await page.evaluate(() => window.lossReads), before, 'unchanged board never requests lost again')
+    await page.evaluate(() => window.changeEmbed({ kind: 'html', html: '<p>Changed embed</p>' }))
+    await frames(page)
+    assert.equal(await page.evaluate(() => window.lossReads), before, 'embed version is not the board version')
+    await page.evaluate(() => window.changeFile(window.source))
+    await page.waitForFunction(before => window.lossReads === before + 1, before)
+    await frames(page)
+  }, { clock: true })
+})

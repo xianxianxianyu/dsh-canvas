@@ -51,6 +51,7 @@ function remaining(old: BoardOp, next: BoardOp): BoardOp | undefined {
 export class BoardJournal {
   private readonly batches = new Map<string, readonly BoardBatch[]>()
   private readonly pending = new Map<string, Promise<unknown>>()
+  private readonly inspected = new Map<string, { readonly text: string; readonly lost: readonly LostBoardBatch[] }>()
   private sequence = 0
 
   /**
@@ -75,6 +76,7 @@ export class BoardJournal {
       const retained = (this.batches.get(path) ?? []).filter(batch => !declined.has(batch.id))
       if (retained.length) this.batches.set(path, retained)
       else this.batches.delete(path)
+      this.inspected.delete(path)
     })
   }
 
@@ -92,6 +94,7 @@ export class BoardJournal {
   private record(path: string, ops: readonly BoardOp[], statuses: readonly OpStatus[]): void {
     const applied = ops.filter((_, index) => statuses[index] === 'applied')
     if (!applied.length) return // retries, conflicts and refusals do not create fictitious history
+    this.inspected.delete(path)
     let batches = [...(this.batches.get(path) ?? [])]
     const batch: BoardBatch = { id: `board-${++this.sequence}`, at: new Date().toISOString(), ops: [] }
     batches.push(batch)
@@ -106,13 +109,19 @@ export class BoardJournal {
     this.batches.set(path, batches.filter(entry => entry.ops.length).slice(-BOARD_JOURNAL_LIMIT))
   }
 
-  /** Pure inspection of the supplied file snapshot; never writes or refreshes agent observation. */
+  /** Inspect once per source/intent snapshot; never writes or refreshes agent observation. */
   lost(path: string, text: string): readonly LostBoardBatch[] {
-    return (this.batches.get(path) ?? []).flatMap(batch => {
+    const batches = this.batches.get(path)
+    if (batches === undefined) return []
+    const cached = this.inspected.get(path)
+    if (cached?.text === text) return cached.lost
+    const lost = batches.flatMap(batch => {
       const replay = applyBoardOps(text, batch.ops)
       if (!replay.ok) return [] // normal board validation reports invalid source instead
       const count = replay.statuses.filter(status => status === 'applied').length
       return count ? [{ ...batch, count }] : []
     })
+    this.inspected.set(path, { text, lost })
+    return lost
   }
 }

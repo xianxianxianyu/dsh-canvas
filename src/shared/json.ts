@@ -155,27 +155,34 @@ export function parseJson(text: string): JsonParse {
   }
 }
 
-/** The plain value of a node, as `JSON.parse` would give it (a repeated key keeps its last value). */
-export function plainOf(node: JsonNode): unknown {
-  switch (node.kind) {
-    case 'object': return Object.fromEntries(node.members.map(member => [member.key, plainOf(member.value)]))
-    case 'array': return node.items.map(plainOf)
-    case 'null': return null
-    default: return node.value
-  }
+export interface SourceLocation {
+  readonly line: number
+  readonly column: number
+  readonly snippet: string
 }
+export type SourceLocator = (offset: number) => SourceLocation
 
 /**
- * 1-based line and column of an offset, and the line itself with a caret under the column (tabs
- * shown as one space, long lines cut to a window around the column).
+ * Index one immutable source once. Each lookup is O(log lines), including a bounded snippet;
+ * no lookup scans/copies the prefix or the entire line (which may itself be a large JSON file).
  */
-export function locate(text: string, offset: number): { readonly line: number; readonly column: number; readonly snippet: string } {
-  const lineStart = offset === 0 ? 0 : text.lastIndexOf('\n', offset - 1) + 1
-  const newline = text.indexOf('\n', offset)
-  const source = text.slice(lineStart, newline === -1 ? text.length : newline).replace(/\r$/u, '').replaceAll('\t', ' ')
-  const line = text.slice(0, lineStart).split('\n').length
-  const column = offset - lineStart + 1
-  const from = Math.max(0, column - 61)
-  const shown = `${from > 0 ? '…' : ''}${source.slice(from, column + 59)}${column + 59 < source.length ? '…' : ''}`
-  return { line, column, snippet: `${shown}\n${'-'.repeat(column - 1 - from + (from > 0 ? 1 : 0))}^` }
+export function sourceLocator(text: string): SourceLocator {
+  const starts = [0]
+  for (let at = text.indexOf('\n'); at !== -1; at = text.indexOf('\n', at + 1)) starts.push(at + 1)
+  return offset => {
+    let low = 0, high = starts.length
+    while (low + 1 < high) {
+      const middle = (low + high) >>> 1
+      if (starts[middle]! <= offset) low = middle
+      else high = middle
+    }
+    const start = starts[low]!
+    let end = starts[low + 1] === undefined ? text.length : starts[low + 1]! - 1
+    if (text[end - 1] === '\r') end--
+    const column = offset - start + 1
+    const from = Math.max(0, column - 61)
+    const until = Math.min(end, start + column + 59)
+    const shown = `${from > 0 ? '…' : ''}${text.slice(start + from, until).replaceAll('\t', ' ')}${until < end ? '…' : ''}`
+    return { line: low + 1, column, snippet: `${shown}\n${'-'.repeat(column - 1 - from + (from > 0 ? 1 : 0))}^` }
+  }
 }

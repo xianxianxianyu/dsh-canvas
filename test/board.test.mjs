@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { embedOf, parseBoard, scene } from '../src/shared/board.ts'
+import { sourceLocator } from '../src/shared/json.ts'
 
 /** The canonical form the canvas-board skill teaches: one node or edge per line, tab indents. */
 const BOARD = readFileSync(new URL('fixtures/plan.canvas', import.meta.url), 'utf8')
@@ -143,4 +144,16 @@ test('scene lays out boxes, picks edge sides, finds overlaps and bounds everythi
   }
   assert.ok(s.bounds.x <= -40 && s.bounds.y <= -40 && s.bounds.x + s.bounds.width >= 660 && s.bounds.y + s.bounds.height >= 500)
   assert.deepEqual(scene({ nodes: [], edges: [] }).bounds, { x: 0, y: 0, width: 0, height: 0 })
+})
+
+test('indexed source locations handle CRLF, tabs, newline offsets, EOF and bounded long-line snippets', () => {
+  const locate = sourceLocator('a\r\n\tbc\n')
+  assert.deepEqual(locate(0), { line: 1, column: 1, snippet: 'a\n^' })
+  assert.deepEqual(locate(4), { line: 2, column: 2, snippet: ' bc\n-^' })
+  assert.deepEqual(locate(6), { line: 2, column: 4, snippet: ' bc\n---^' })
+  assert.deepEqual(locate(7), { line: 3, column: 1, snippet: '\n^' })
+  const far = sourceLocator('x'.repeat(100_000))(90_000)
+  assert.deepEqual([far.line, far.column], [1, 90_001])
+  assert.ok(far.snippet.length < 200)
+  assert.ok(far.snippet.startsWith('…') && far.snippet.includes('…\n'))
 })

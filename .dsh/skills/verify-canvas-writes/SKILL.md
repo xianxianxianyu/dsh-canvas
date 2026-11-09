@@ -14,8 +14,8 @@ acknowledged change, not whether a parser accepts arbitrary input.
 ## Coverage and synchronization
 
 **Source synchronization:** canvas same-commit subject
-`fix(board): retain recovery intent per field` (place supersession subtracts only
-supplied fields, retaining original batch identity/time and exact replay fields); DSH source
+`fix(board): bound drag work and cache loss inspections` (indexed source locations,
+batched field edits and snapshot-keyed loss caching; publication/field rules unchanged); DSH source
 `b830ec950faba0a46dda564be3e2d854afed94f1` (rc.5). The model, all configurations,
 scratch controls and recorded results were rerun together. The installed 0.2.2-rc.1 P1
 probe found the observation policy disabled, unlike that source default. Thus
@@ -39,11 +39,11 @@ Function names remain authoritative when line numbers move.
 | `YouSendBatch`, `YouResendBatch`, `RouteAnswersDone` | `src/host/route.ts` `handleBoard` / `boardRoute`: parse, call journal, HTTP outcome. Lost reply/resend is an environment action. |
 | `RouteStatsFile` | `src/host/board-write.ts:38-42` `writeBoardOps` step 1; `MAX_ATTEMPTS:15`. |
 | `RouteReadsText` | `board-write.ts:43-49` step 2; version and text are separate reads. |
-| `RouteAppliesBatch` | `board-write.ts:51-55` step 3 and no-change return; `src/shared/board-ops.ts:53-58,73-78` `applyBoardOps` / `applyOne` (`addNote`). |
+| `RouteAppliesBatch` | `board-write.ts` `writeBoardOps` validation/no-change branch; `board-ops.ts` `applyBoardOps`, `applyFields`, `applyOne`: field runs share a parse/splice pass but preserve per-op order/status; deletions splice incident edges and nodes together. |
 | `RouteWritesVersion` | `board-write.ts:57-59` step 4; `DSH/packages/fs/fs-local/src/index.ts:202-254` `LocalFileSystem.writeText`: `withLock`, version guard, atomic publication. |
 | `RouteRetriesStale` | `board-write.ts:60-65` step 5: stale only, three rounds, busy. Other I/O errors and abort are outside this model. |
 | `RouteRecordsIntent` | `src/host/board-journal.ts` `BoardJournal.apply` / `enqueue` / `record`: serialize routes per path, record only applied ops after publication and **before** HTTP success. A later applied request creates new retained intent, not the previously declined batch. |
-| `JournalFlagsLoss`, `NoSilentLoss` | `BoardJournal.lost`: dry-run current text, any applied status means recoverable loss; `handleBoard` GET and `src/host/check.ts` `checkFile` expose losses, or explicitly report invalid source. `src/host/index.ts` `apply` shares one journal across route and check. |
+| `JournalFlagsLoss`, `NoSilentLoss` | `BoardJournal.lost`: dry-run current text, any applied status means recoverable loss. The result is cached by source text for each path; `record` and `decline` invalidate it when journal intent changes. `handleBoard` GET and `checkFile` expose losses or explicitly report invalid source. Cache reuse changes no modeled observation. |
 | `YouReapplyChange` | Reapply submits the same ops through `handleBoard` / `BoardJournal.apply`; an unchanged retry does not create a batch. |
 | `YouDeclineRecovery`, `DeclinedNeverReported` | `handleBoard` POST `{ sessionId?, path, decline: batchIds }` awaits `BoardJournal.decline` and echoes `{ declined: batchIds }`. `decline` uses the same per-path `enqueue` as `apply` and physically removes the selected retained batches. Absent IDs succeed; other batches/paths and board bytes are unchanged. The action models successful queued completion, not a local banner dismissal. |
 | `FieldResize`, `FieldDrag`, `FieldInspect`, `FieldReapply` | `BoardJournal.remaining` subtracts only fields provided by the next place; `record` preserves each remaining batch's id/time; `lost` returns those partial ops, accepted unchanged by `boardOpSchema` and `applyBoardOps`. `Fields.cfg` checks this separate bounded projection. |
@@ -78,6 +78,28 @@ rejects unchecked properties, and executes real-code scratch controls. With
 `--record`, it replaces its generated `formal/board-write/results/` and copies
 `chart/chart.mmd` to `formal/board-write/chart.mmd`; paths in retained TLC logs
 are sanitized. Omit `--record` for a read-only rerun. No product source is edited.
+
+Large-board route regression (no DSH server/profile; temporary disk-backed provider,
+real route/writer/journal, worker-thread HTTP client and unrelated comments request):
+
+```sh
+node --test test/board-performance.test.mjs
+node scripts/board-benchmark.mjs . 600
+node scripts/board-benchmark.mjs . 4000
+```
+
+Compare five alternating runs against a frozen baseline source root. Each run
+asserts 200 changed positions on disk, untouched remaining nodes, retained loss
+counts and successful HTTP responses; it reports CPU time, route latency and
+independent-client latency. `--profile` exercises 30 parses for a separate CPU
+profile, not a timing claim. Fresh HTTP connections avoid stale pooled-socket
+reuse after baseline event-loop stalls. The fixtures retain the adversary's
+600-node/599-edge and 4000-node counts, with exact byte lengths in the output.
+
+The client checks file versions on visible polling/watch refreshes and requests
+losses only when that version changes. Embed-only refreshes do not request losses;
+confirmed decline responses remove their exact batch IDs locally without another
+unchanged-file GET. Deferred responses from earlier generations cannot revive them.
 
 Individual statechart command (substitute any config below):
 
