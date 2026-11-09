@@ -12,7 +12,7 @@ A diagram is a plain Mermaid file: `name.mmd` (or `.mermaid`). Write only Mermai
 - Draw one question per chart. Aim for about 20 arrows or fewer; past that, split the chart or merge states that act the same.
 - Label nodes and arrows in the reader's words: what they see or care about ("支付失败", "you press pay"), never function, variable or table names.
 - Keep labels short, about 6 words or 12 Chinese characters. Put the detail in your reply, not on the chart.
-- Give nodes short ids and put the words in the label: `pay[支付中]`, or `s3: 支付失败` in a state chart. Keep ids stable when you edit, so earlier references still point at the same thing.
+- Give nodes short ids and put the words in the label: `pay[支付中]`, or `s3: 支付失败` in a state chart. Keep ids stable when you edit: the user's comments are pinned to ids, and earlier references point at them too.
 - Pick the direction that matches the reading: `flowchart LR` for a sequence of steps, `flowchart TB` for a hierarchy or a long process.
 - Quote labels that contain brackets, colons or quotes: `A["retry (3×)"]`.
 
