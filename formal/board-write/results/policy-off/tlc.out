@@ -1,28 +1,21 @@
 TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
 Warning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the "-XX:+UseParallelGC" property.
 (Use the -nowarning option to disable this warning.)
-Running breadth-first search Model-Checking with fp 0 and seed -8647189229377965870 with 1 worker on 12 cores with 8192MB heap and 64MB offheap memory [pid: 36941] (Mac OS X 27.0.1 aarch64, Eclipse Adoptium 25.0.5 x86_64, MSBDiskFPSet, DiskStateQueue).
+Running breadth-first search Model-Checking with fp 0 and seed -7465137975307311799 with 1 worker on 12 cores with 8192MB heap and 64MB offheap memory [pid: 57769] (Mac OS X 27.0.1 aarch64, Eclipse Adoptium 25.0.5 x86_64, MSBDiskFPSet, DiskStateQueue).
 Parsing file $CANVAS_REPO/formal/board-write/BoardWrite.tla
-Parsing file /private$TMPDIR/statechart-rVl8Cw/statechart-8Yww8S/tmp-verdict-1/Integers.tla
-Parsing file /private$TMPDIR/statechart-rVl8Cw/statechart-8Yww8S/tmp-verdict-1/Naturals.tla
+Parsing file /private$TMPDIR/statechart-Mwe0Fj/statechart-uADM8o/tmp-verdict-1/Integers.tla
+Parsing file /private$TMPDIR/statechart-Mwe0Fj/statechart-uADM8o/tmp-verdict-1/Naturals.tla
 Semantic processing of module Naturals
 Semantic processing of module Integers
 Semantic processing of module BoardWrite
-Starting... (2026-11-09 04:50:07)
+Starting... (2026-11-09 06:07:26)
 Implied-temporal checking--satisfiability problem has 3 branches.
 Computing initial states...
 Computed 2 initial states...
-Finished computing initial states: 4 distinct states generated at 2026-11-09 04:50:07.
+Finished computing initial states: 4 distinct states generated at 2026-11-09 06:07:27.
 Error: Invariant NoLostAcknowledgedChange is violated.
 Error: The behavior up to this point is:
 State 1: <Initial predicate>
-/\ agent = [ phase |-> "stat",
-  base |-> 0,
-  seen |-> -1,
-  text |-> {},
-  n |-> 1,
-  published |-> 0 ]
-/\ wroteOverInvalid = FALSE
 /\ route = [ journal |-> FALSE,
   valid |-> TRUE,
   phase |-> "idle",
@@ -34,10 +27,7 @@ State 1: <Initial predicate>
   steps |-> 0,
   declined |-> FALSE ]
 /\ file = [facts |-> {}, valid |-> TRUE, exists |-> TRUE, version |-> 0]
-/\ replayChanged = FALSE
 /\ acknowledged = {}
-
-State 2: <YouSendBatch line 33, col 3 to line 35, col 77 of module BoardWrite>
 /\ agent = [ phase |-> "stat",
   base |-> 0,
   seen |-> -1,
@@ -45,6 +35,9 @@ State 2: <YouSendBatch line 33, col 3 to line 35, col 77 of module BoardWrite>
   n |-> 1,
   published |-> 0 ]
 /\ wroteOverInvalid = FALSE
+/\ replayChanged = FALSE
+
+State 2: <YouSendBatch line 33, col 3 to line 35, col 77 of module BoardWrite>
 /\ route = [ journal |-> FALSE,
   valid |-> TRUE,
   phase |-> "stat",
@@ -56,10 +49,7 @@ State 2: <YouSendBatch line 33, col 3 to line 35, col 77 of module BoardWrite>
   steps |-> 0,
   declined |-> FALSE ]
 /\ file = [facts |-> {}, valid |-> TRUE, exists |-> TRUE, version |-> 0]
-/\ replayChanged = FALSE
 /\ acknowledged = {}
-
-State 3: <RouteStatsFile line 66, col 3 to line 69, col 77 of module BoardWrite>
 /\ agent = [ phase |-> "stat",
   base |-> 0,
   seen |-> -1,
@@ -67,6 +57,9 @@ State 3: <RouteStatsFile line 66, col 3 to line 69, col 77 of module BoardWrite>
   n |-> 1,
   published |-> 0 ]
 /\ wroteOverInvalid = FALSE
+/\ replayChanged = FALSE
+
+State 3: <RouteStatsFile line 68, col 3 to line 71, col 77 of module BoardWrite>
 /\ route = [ journal |-> FALSE,
   valid |-> TRUE,
   phase |-> "read",
@@ -78,10 +71,7 @@ State 3: <RouteStatsFile line 66, col 3 to line 69, col 77 of module BoardWrite>
   steps |-> 1,
   declined |-> FALSE ]
 /\ file = [facts |-> {}, valid |-> TRUE, exists |-> TRUE, version |-> 0]
-/\ replayChanged = FALSE
 /\ acknowledged = {}
-
-State 4: <RouteReadsText line 73, col 3 to line 76, col 77 of module BoardWrite>
 /\ agent = [ phase |-> "stat",
   base |-> 0,
   seen |-> -1,
@@ -89,6 +79,9 @@ State 4: <RouteReadsText line 73, col 3 to line 76, col 77 of module BoardWrite>
   n |-> 1,
   published |-> 0 ]
 /\ wroteOverInvalid = FALSE
+/\ replayChanged = FALSE
+
+State 4: <RouteReadsText line 75, col 3 to line 78, col 77 of module BoardWrite>
 /\ route = [ journal |-> FALSE,
   valid |-> TRUE,
   phase |-> "apply",
@@ -100,10 +93,7 @@ State 4: <RouteReadsText line 73, col 3 to line 76, col 77 of module BoardWrite>
   steps |-> 2,
   declined |-> FALSE ]
 /\ file = [facts |-> {}, valid |-> TRUE, exists |-> TRUE, version |-> 0]
-/\ replayChanged = FALSE
 /\ acknowledged = {}
-
-State 5: <RouteAppliesBatch line 80, col 3 to line 85, col 77 of module BoardWrite>
 /\ agent = [ phase |-> "stat",
   base |-> 0,
   seen |-> -1,
@@ -111,6 +101,9 @@ State 5: <RouteAppliesBatch line 80, col 3 to line 85, col 77 of module BoardWri
   n |-> 1,
   published |-> 0 ]
 /\ wroteOverInvalid = FALSE
+/\ replayChanged = FALSE
+
+State 5: <RouteAppliesBatch line 82, col 3 to line 87, col 77 of module BoardWrite>
 /\ route = [ journal |-> FALSE,
   valid |-> TRUE,
   phase |-> "write",
@@ -122,10 +115,29 @@ State 5: <RouteAppliesBatch line 80, col 3 to line 85, col 77 of module BoardWri
   steps |-> 3,
   declined |-> FALSE ]
 /\ file = [facts |-> {}, valid |-> TRUE, exists |-> TRUE, version |-> 0]
-/\ replayChanged = FALSE
 /\ acknowledged = {}
+/\ agent = [ phase |-> "stat",
+  base |-> 0,
+  seen |-> -1,
+  text |-> {},
+  n |-> 1,
+  published |-> 0 ]
+/\ wroteOverInvalid = FALSE
+/\ replayChanged = FALSE
 
-State 6: <AgentStatsFile line 129, col 3 to line 132, col 77 of module BoardWrite>
+State 6: <AgentStatsFile line 132, col 3 to line 135, col 77 of module BoardWrite>
+/\ route = [ journal |-> FALSE,
+  valid |-> TRUE,
+  phase |-> "write",
+  seen |-> 0,
+  text |-> {},
+  round |-> 1,
+  request |-> 1,
+  changed |-> FALSE,
+  steps |-> 3,
+  declined |-> FALSE ]
+/\ file = [facts |-> {}, valid |-> TRUE, exists |-> TRUE, version |-> 0]
+/\ acknowledged = {}
 /\ agent = [ phase |-> "read",
   base |-> 0,
   seen |-> -1,
@@ -133,6 +145,9 @@ State 6: <AgentStatsFile line 129, col 3 to line 132, col 77 of module BoardWrit
   n |-> 1,
   published |-> 0 ]
 /\ wroteOverInvalid = FALSE
+/\ replayChanged = FALSE
+
+State 7: <AgentReadsFile line 138, col 3 to line 140, col 77 of module BoardWrite>
 /\ route = [ journal |-> FALSE,
   valid |-> TRUE,
   phase |-> "write",
@@ -144,10 +159,7 @@ State 6: <AgentStatsFile line 129, col 3 to line 132, col 77 of module BoardWrit
   steps |-> 3,
   declined |-> FALSE ]
 /\ file = [facts |-> {}, valid |-> TRUE, exists |-> TRUE, version |-> 0]
-/\ replayChanged = FALSE
 /\ acknowledged = {}
-
-State 7: <AgentReadsFile line 135, col 3 to line 137, col 77 of module BoardWrite>
 /\ agent = [ phase |-> "observe",
   base |-> 0,
   seen |-> -1,
@@ -155,28 +167,9 @@ State 7: <AgentReadsFile line 135, col 3 to line 137, col 77 of module BoardWrit
   n |-> 1,
   published |-> 0 ]
 /\ wroteOverInvalid = FALSE
-/\ route = [ journal |-> FALSE,
-  valid |-> TRUE,
-  phase |-> "write",
-  seen |-> 0,
-  text |-> {},
-  round |-> 1,
-  request |-> 1,
-  changed |-> FALSE,
-  steps |-> 3,
-  declined |-> FALSE ]
-/\ file = [facts |-> {}, valid |-> TRUE, exists |-> TRUE, version |-> 0]
 /\ replayChanged = FALSE
-/\ acknowledged = {}
 
-State 8: <RouteWritesVersion line 90, col 3 to line 102, col 27 of module BoardWrite>
-/\ agent = [ phase |-> "observe",
-  base |-> 0,
-  seen |-> -1,
-  text |-> {},
-  n |-> 1,
-  published |-> 0 ]
-/\ wroteOverInvalid = FALSE
+State 8: <RouteWritesVersion line 92, col 3 to line 104, col 27 of module BoardWrite>
 /\ route = [ journal |-> FALSE,
   valid |-> TRUE,
   phase |-> "journal",
@@ -188,10 +181,7 @@ State 8: <RouteWritesVersion line 90, col 3 to line 102, col 27 of module BoardW
   steps |-> 4,
   declined |-> FALSE ]
 /\ file = [facts |-> {0}, valid |-> TRUE, exists |-> TRUE, version |-> 1]
-/\ replayChanged = FALSE
 /\ acknowledged = {}
-
-State 9: <RouteRecordsIntent line 115, col 3 to line 118, col 77 of module BoardWrite>
 /\ agent = [ phase |-> "observe",
   base |-> 0,
   seen |-> -1,
@@ -199,6 +189,9 @@ State 9: <RouteRecordsIntent line 115, col 3 to line 118, col 77 of module Board
   n |-> 1,
   published |-> 0 ]
 /\ wroteOverInvalid = FALSE
+/\ replayChanged = FALSE
+
+State 9: <RouteRecordsIntent line 117, col 3 to line 121, col 77 of module BoardWrite>
 /\ route = [ journal |-> TRUE,
   valid |-> TRUE,
   phase |-> "reply",
@@ -210,10 +203,7 @@ State 9: <RouteRecordsIntent line 115, col 3 to line 118, col 77 of module Board
   steps |-> 5,
   declined |-> FALSE ]
 /\ file = [facts |-> {0}, valid |-> TRUE, exists |-> TRUE, version |-> 1]
-/\ replayChanged = FALSE
 /\ acknowledged = {}
-
-State 10: <RouteAnswersDone line 122, col 3 to line 125, col 63 of module BoardWrite>
 /\ agent = [ phase |-> "observe",
   base |-> 0,
   seen |-> -1,
@@ -221,6 +211,9 @@ State 10: <RouteAnswersDone line 122, col 3 to line 125, col 63 of module BoardW
   n |-> 1,
   published |-> 0 ]
 /\ wroteOverInvalid = FALSE
+/\ replayChanged = FALSE
+
+State 10: <RouteAnswersDone line 125, col 3 to line 128, col 63 of module BoardWrite>
 /\ route = [ journal |-> TRUE,
   valid |-> TRUE,
   phase |-> "done",
@@ -232,10 +225,29 @@ State 10: <RouteAnswersDone line 122, col 3 to line 125, col 63 of module BoardW
   steps |-> 6,
   declined |-> FALSE ]
 /\ file = [facts |-> {0}, valid |-> TRUE, exists |-> TRUE, version |-> 1]
-/\ replayChanged = FALSE
 /\ acknowledged = {0}
+/\ agent = [ phase |-> "observe",
+  base |-> 0,
+  seen |-> -1,
+  text |-> {},
+  n |-> 1,
+  published |-> 0 ]
+/\ wroteOverInvalid = FALSE
+/\ replayChanged = FALSE
 
-State 11: <AgentObservesRead line 142, col 3 to line 145, col 77 of module BoardWrite>
+State 11: <AgentObservesRead line 145, col 3 to line 148, col 77 of module BoardWrite>
+/\ route = [ journal |-> TRUE,
+  valid |-> TRUE,
+  phase |-> "done",
+  seen |-> 0,
+  text |-> {},
+  round |-> 1,
+  request |-> 1,
+  changed |-> TRUE,
+  steps |-> 6,
+  declined |-> FALSE ]
+/\ file = [facts |-> {0}, valid |-> TRUE, exists |-> TRUE, version |-> 1]
+/\ acknowledged = {0}
 /\ agent = [ phase |-> "ready",
   base |-> 0,
   seen |-> -1,
@@ -243,28 +255,9 @@ State 11: <AgentObservesRead line 142, col 3 to line 145, col 77 of module Board
   n |-> 1,
   published |-> 0 ]
 /\ wroteOverInvalid = FALSE
-/\ route = [ journal |-> TRUE,
-  valid |-> TRUE,
-  phase |-> "done",
-  seen |-> 0,
-  text |-> {},
-  round |-> 1,
-  request |-> 1,
-  changed |-> TRUE,
-  steps |-> 6,
-  declined |-> FALSE ]
-/\ file = [facts |-> {0}, valid |-> TRUE, exists |-> TRUE, version |-> 1]
 /\ replayChanged = FALSE
-/\ acknowledged = {0}
 
-State 12: <AgentPublishes line 165, col 24 to line 165, col 55 of module BoardWrite>
-/\ agent = [ phase |-> "confirm",
-  base |-> 0,
-  seen |-> -1,
-  text |-> {},
-  n |-> 1,
-  published |-> 2 ]
-/\ wroteOverInvalid = FALSE
+State 12: <AgentPublishes line 168, col 24 to line 168, col 55 of module BoardWrite>
 /\ route = [ journal |-> TRUE,
   valid |-> TRUE,
   phase |-> "done",
@@ -276,11 +269,18 @@ State 12: <AgentPublishes line 165, col 24 to line 165, col 55 of module BoardWr
   steps |-> 6,
   declined |-> FALSE ]
 /\ file = [facts |-> {1}, valid |-> FALSE, exists |-> TRUE, version |-> 2]
-/\ replayChanged = FALSE
 /\ acknowledged = {0}
+/\ agent = [ phase |-> "confirm",
+  base |-> 0,
+  seen |-> -1,
+  text |-> {},
+  n |-> 1,
+  published |-> 2 ]
+/\ wroteOverInvalid = FALSE
+/\ replayChanged = FALSE
 
 2278 states generated, 1279 distinct states found, 358 states left on queue.
 The depth of the complete state graph search is 12.
 The average outdegree of the complete state graph is 1 (minimum is 0, the maximum 5 and the 95th percentile is 3).
-Finished in 00s at (2026-11-09 04:50:07)
+Finished in 00s at (2026-11-09 06:07:27)
 

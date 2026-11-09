@@ -1,6 +1,6 @@
 # BoardWrite
 
-TLC reached 22,099 states, more than the chart budget of 500, so the chart draws only the bug paths: 14 states and 12 arrows.
+TLC reached 21,205 states, more than the chart budget of 500, so the chart draws only the bug paths: 14 states and 12 arrows.
 The step the agent attempts its write or matching hunk edit changes YourSave and Agent at the same time.
 
 ## NoLostAcknowledgedChange breaks
@@ -19,4 +19,4 @@ The shortest path has 11 steps:
 11. the agent attempts its write or matching hunk edit: YourSave Person change absent; invalid source is visible, Agent Agent write succeeded; records its version
 
 ## Rules that hold
-TypeOK, NoLostAgentChange, NoSilentLoss, NeverWritesOverInvalid, ReplaySafe, RoundsBounded, NoDeadlock, RouteTerminates, RecoveryEventually
+TypeOK, NoLostAgentChange, NoSilentLoss, DeclinedNeverReported, NeverWritesOverInvalid, ReplaySafe, RoundsBounded, NoDeadlock, RouteTerminates, RecoveryEventually

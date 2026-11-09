@@ -28,7 +28,9 @@ export function state(v: State) {
   const harm = [
     v.acknowledged.some(fact => fact !== 0 && !v.file.facts.includes(fact)) ? 'Agent acknowledged work lost' : '',
     personLost ? (!v.file.valid ? 'Person change absent; invalid source is visible' :
-      v.route.journal ? (v.route.declined ? 'Recovery declined; loss still flagged' : 'Person change lost; journal flags it') : 'Person change silently lost') : '',
+      v.route.declined ? 'Recovery declined; change stays absent' :
+      v.route.journal ? 'Person change lost; journal flags it' : 'Person change silently lost') : '',
+    v.route.declined && v.route.journal ? 'Declined recovery is still retained' : '',
     v.wroteOverInvalid ? 'Invalid board overwritten' : '', v.replayChanged ? 'Replay wrote again' : '',
   ].filter(Boolean);
   return { YourSave: harm.length ? harm.join(' / ') : phases[v.route.phase], Agent: agentPhases[v.agent.phase] };
@@ -37,7 +39,7 @@ export function state(v: State) {
 export function step(action: string, from: State, to: State) {
   const labels: Record<string, string> = {
     YouSendBatch: 'you save a note', YouResendBatch: 'you resend the same note',
-    YouReapplyChange: 'you reapply the detected change', YouDeclineRecovery: 'you decline recovery',
+    YouReapplyChange: 'you reapply the detected change',
     RouteRecordsIntent: 'the host retains applied intent before replying',
     YouLoseReply: 'the reply is lost', RouteStatsFile: 'the file is found',
     RouteReadsText: 'the text is read', RouteAppliesBatch: 'your absolute operation is applied',
@@ -52,6 +54,8 @@ export function step(action: string, from: State, to: State) {
     AgentEditsCurrent: 'a bare edit transforms current text under the lock',
     AgentObservesSuccess: 'the agent receives success', EveryoneRests: 'both writers are finished',
   };
+  if (action === 'YouDeclineRecovery') return to.route.journal ?
+    'you decline, but the host retains recovery' : 'you decline; the host forgets this recovery';
   if (action === 'RouteStatsFile' && to.route.phase === 'not-found') return 'the file is absent';
   if (action === 'RouteAppliesBatch') {
     if (to.route.phase === 'invalid-source') return 'invalid JSON is refused';

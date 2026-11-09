@@ -32,9 +32,10 @@ export const boardQuerySchema = z.strictObject({
   path: z.string().min(1),
 })
 
-/** `POST /api/canvas/board`. */
-export const boardPostSchema = boardQuerySchema.extend({
-  ops: z.array(boardOpSchema).min(1).max(200),
-})
+/** `POST /api/canvas/board`: edit the file OR accept an overwrite of retained batches. */
+export const boardPostSchema = z.union([
+  boardQuerySchema.extend({ ops: z.array(boardOpSchema).min(1).max(200) }),
+  boardQuerySchema.extend({ decline: z.array(id).min(1).max(200) }),
+])
 
 export type BoardOp = z.infer<typeof boardOpSchema>

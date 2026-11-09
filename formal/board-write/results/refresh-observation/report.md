@@ -20,4 +20,4 @@ The shortest path has 11 steps:
 11. you receive done: YourSave Person change absent; invalid source is visible, Agent Agent write succeeded; records its version
 
 ## Rules that hold
-TypeOK, NoLostAgentChange, NoSilentLoss, NeverWritesOverInvalid, ReplaySafe, RoundsBounded, NoDeadlock, RouteTerminates, RecoveryEventually
+TypeOK, NoLostAgentChange, NoSilentLoss, DeclinedNeverReported, NeverWritesOverInvalid, ReplaySafe, RoundsBounded, NoDeadlock, RouteTerminates, RecoveryEventually

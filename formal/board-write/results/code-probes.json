@@ -60,6 +60,35 @@
     ]
   },
   {
+    "scenario": "decline removes retained recovery",
+    "afterDeclineBatches": [],
+    "afterLaterOverwriteBatches": [],
+    "facts": [
+      "agent"
+    ]
+  },
+  {
+    "scenario": "retain-declined scratch mutant",
+    "afterDeclineBatches": [
+      "board-1"
+    ],
+    "afterLaterOverwriteBatches": [
+      "board-1"
+    ],
+    "facts": [
+      "agent"
+    ]
+  },
+  {
+    "scenario": "decline is batch- and path-scoped",
+    "remainingBatches": [
+      "board-2"
+    ],
+    "otherPathBatches": [
+      "board-3"
+    ]
+  },
+  {
     "scenario": "busy then resend",
     "rounds": 3,
     "facts": [

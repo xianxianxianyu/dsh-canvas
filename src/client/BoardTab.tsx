@@ -10,7 +10,7 @@ import { DIAGRAM_FONT } from '../shared/diagram.ts'
 import { formatDiagnostic } from '../shared/report.ts'
 import type { BoardTabProps, DocumentBodyProps } from './dsh.ts'
 import { useBoard, type BoardHandle } from './board.ts'
-import { boardId, connectOp, placeOp, removeOps, visibleLosses } from './board-ui.ts'
+import { boardId, connectOp, describeRecoveryOp, placeOp, removeOps } from './board-ui.ts'
 
 import { readScheme, watchScheme } from './scheme.ts'
 
@@ -57,9 +57,8 @@ export function BoardTab(props: BoardTabProps): ReactNode {
 function BoardBody({ address, visible, runtime, t }: { readonly address: string; readonly visible: boolean; readonly runtime: BoardTabProps; readonly t: Translate }): ReactNode {
   const handle = useBoard(address, visible, runtime)
   const scheme = useSyncExternalStore(watchScheme, readScheme)
-  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set())
   const readonly = handle.load.kind !== 'ready'
-  const lost = visibleLosses(handle.lost, dismissed)
+  const lost = handle.lost
   return <div data-canvas-board data-readonly={readonly ? 'true' : 'false'} style={{ ...fill, display: 'flex', flexDirection: 'column', position: 'relative', color: THEMES[scheme].pele.fg, background: THEMES[scheme].pele.bg, fontFamily: DIAGRAM_FONT, lineHeight: 'normal' }}>
     <style>{flowCss}</style>
     <style>{'[data-canvas-board] .react-flow__node-canvas{border:0;background:transparent;border-radius:8px;padding:0}[data-canvas-board] .react-flow__node.selected{outline:1px solid #688fff;outline-offset:3px}[data-canvas-board] button:disabled{opacity:.45;cursor:default}[data-canvas-board] .react-flow__attribution{font-size:9px}'}</style>
@@ -67,9 +66,11 @@ function BoardBody({ address, visible, runtime, t }: { readonly address: string;
       <strong>{t('board.lost')}</strong>
       {lost.map(batch => <div key={batch.id} data-canvas-lost={batch.id} style={{ marginTop: 6 }}>
         <div>{new Date(batch.at).toLocaleTimeString()} · {batch.count} · {batch.id}</div>
-        <pre style={{ whiteSpace: 'pre-wrap', margin: '4px 0', fontSize: 11 }}>{JSON.stringify(batch.ops)}</pre>
+        <ul style={{ margin: '4px 0', paddingLeft: 20, overflowWrap: 'anywhere' }}>
+          {batch.ops.map((op, index) => <li key={index}>{describeRecoveryOp(op, handle.load.kind === 'ready' ? handle.load.board : undefined, t)}</li>)}
+        </ul>
         <button style={button} disabled={readonly || handle.saving || handle.refreshing} onClick={() => { void handle.submit(batch.ops) }}>{t('board.reapply')}</button>{' '}
-        <button style={button} onClick={() => { setDismissed(previous => new Set([...previous, batch.id])) }}>{t('board.dismiss')}</button>
+        <button style={button} disabled={handle.saving || handle.refreshing} onClick={() => { void handle.decline([batch.id]) }}>{t('board.dismiss')}</button>
       </div>)}
     </div>}
     {handle.error && <div role="alert" style={{ padding: 8, fontSize: 12 }}>{handle.error}{handle.retryOps && <button style={{ ...button, marginLeft: 8 }} disabled={readonly || handle.saving || handle.refreshing} onClick={() => { void handle.submit(handle.retryOps!) }}>{t('board.retry')}</button>}</div>}

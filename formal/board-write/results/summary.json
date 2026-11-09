@@ -8,6 +8,7 @@
       "NoLostAcknowledgedChange",
       "NoLostAgentChange",
       "NoSilentLoss",
+      "DeclinedNeverReported",
       "NeverWritesOverInvalid",
       "ReplaySafe",
       "RoundsBounded",
@@ -18,7 +19,7 @@
   },
   {
     "case": "policy-off",
-    "states": "22,099",
+    "states": "21,205",
     "broken": [
       "NoLostAcknowledgedChange"
     ],
@@ -26,6 +27,7 @@
       "TypeOK",
       "NoLostAgentChange",
       "NoSilentLoss",
+      "DeclinedNeverReported",
       "NeverWritesOverInvalid",
       "ReplaySafe",
       "RoundsBounded",
@@ -45,6 +47,7 @@
     "held": [
       "TypeOK",
       "NoSilentLoss",
+      "DeclinedNeverReported",
       "ReplaySafe",
       "RoundsBounded",
       "NoDeadlock",
@@ -62,6 +65,7 @@
       "TypeOK",
       "NoLostAgentChange",
       "NoSilentLoss",
+      "DeclinedNeverReported",
       "NeverWritesOverInvalid",
       "ReplaySafe",
       "RoundsBounded",
@@ -81,6 +85,7 @@
       "NoLostAcknowledgedChange",
       "NoLostAgentChange",
       "NoSilentLoss",
+      "DeclinedNeverReported",
       "ReplaySafe",
       "RoundsBounded",
       "NoDeadlock",
@@ -99,6 +104,7 @@
       "NoLostAcknowledgedChange",
       "NoLostAgentChange",
       "NoSilentLoss",
+      "DeclinedNeverReported",
       "NeverWritesOverInvalid",
       "RoundsBounded",
       "NoDeadlock",
@@ -117,11 +123,31 @@
     "held": [
       "TypeOK",
       "NoLostAgentChange",
+      "DeclinedNeverReported",
       "NeverWritesOverInvalid",
       "ReplaySafe",
       "RoundsBounded",
       "NoDeadlock",
       "RouteTerminates"
+    ]
+  },
+  {
+    "case": "retain-declined",
+    "states": "276",
+    "broken": [
+      "DeclinedNeverReported",
+      "NoLostAcknowledgedChange"
+    ],
+    "held": [
+      "TypeOK",
+      "NoLostAgentChange",
+      "NoSilentLoss",
+      "NeverWritesOverInvalid",
+      "ReplaySafe",
+      "RoundsBounded",
+      "NoDeadlock",
+      "RouteTerminates",
+      "RecoveryEventually"
     ]
   },
   {
@@ -133,6 +159,7 @@
       "NoLostAcknowledgedChange",
       "NoLostAgentChange",
       "NoSilentLoss",
+      "DeclinedNeverReported",
       "NeverWritesOverInvalid",
       "ReplaySafe",
       "RoundsBounded",

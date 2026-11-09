@@ -2,7 +2,7 @@
  * The client's two owner-only routes, each registered as an exact Connection route (DSH lets only
  * owner Peers reach those):
  * - `GET|POST /api/canvas/comments` reads and changes a file's comments;
- * - `GET|POST /api/canvas/board` reports lost user intent or applies board operations.
+ * - `GET|POST /api/canvas/board` reports, declines or reapplies retained user intent.
  * Bodies and queries are parsed with zod here; the store, the rules and the write protocol trust
  * what passes.
  */
@@ -126,6 +126,10 @@ async function handleBoard(deps: BoardRouteDeps, request: Request): Promise<Resp
   const post = parse(boardPostSchema, await bodyOf(request))
   const artifact = await artifactOf(deps, post, request.signal)
   if (artifact.mode !== 'board') throw new RouteError(400, `只能改 .canvas 画板：${artifact.path}`)
+  if ('decline' in post) {
+    await deps.journal.decline(artifact.path, post.decline)
+    return Response.json({ declined: post.decline }, { headers: NO_STORE })
+  }
   const outcome = await deps.journal.apply(deps.fs, artifact.target, artifact.path, post.ops, request.signal)
   switch (outcome.kind) {
     case 'done':
@@ -145,6 +149,7 @@ async function handleBoard(deps: BoardRouteDeps, request: Request): Promise<Resp
 
 /**
  * `GET { sessionId?, path }` → `{ lost }`; `POST { sessionId?, path, ops }` → `{ version, statuses }`.
+ * `POST { sessionId?, path, decline: batchIds }` → `{ declined: batchIds }`, including already absent ids.
  * Errors answer `{ error: 'bad-request' | 'not-found' | 'invalid-source' | 'busy' | 'internal', message, diagnostics? }`.
  * @param deps - the Session filesystem and Session directories.
  * @returns the route to register with `ctx.connection.fetch`.

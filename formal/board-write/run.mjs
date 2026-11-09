@@ -11,7 +11,7 @@ const out = resolve(process.argv[2] ?? join(tmpdir(), 'dsh-board-writes'))
 const record = process.argv.includes('--record')
 const statechart = process.env.STATECHART ?? join(homedir(), '.omp/agent/skills/statechart/scripts/statechart')
 const properties = ['TypeOK', 'NoLostAcknowledgedChange', 'NoLostAgentChange', 'NoSilentLoss',
-  'NeverWritesOverInvalid', 'ReplaySafe', 'RoundsBounded', 'NoDeadlock', 'RouteTerminates', 'RecoveryEventually']
+  'DeclinedNeverReported', 'NeverWritesOverInvalid', 'ReplaySafe', 'RoundsBounded', 'NoDeadlock', 'RouteTerminates', 'RecoveryEventually']
 const cases = [
   ['full', 'BoardWrite', []],
   ['policy-off', 'PolicyOff', ['NoLostAcknowledgedChange']],
@@ -20,6 +20,7 @@ const cases = [
   ['skip-validity', 'SkipValidity', ['NeverWritesOverInvalid']],
   ['replay-writes', 'ReplayWrites', ['ReplaySafe']],
   ['no-journal', 'NoJournal', ['NoLostAcknowledgedChange', 'NoSilentLoss', 'RecoveryEventually']],
+  ['retain-declined', 'RetainDeclined', ['NoLostAcknowledgedChange', 'DeclinedNeverReported']],
   ['chart', 'Chart', []],
 ]
 const summary = []
@@ -65,4 +66,4 @@ if (record) {
   await writeFile(join(model, 'results/summary.json'), await readFile(join(out, 'summary.json')))
   await writeFile(join(model, 'results/code-probes.json'), await readFile(join(out, 'code-probes.json')))
 }
-console.log(`Verified both policy modes, five negative controls and real-code probes. Evidence: ${out}`)
+console.log(`Verified both policy modes, six negative controls and real-code probes. Evidence: ${out}`)

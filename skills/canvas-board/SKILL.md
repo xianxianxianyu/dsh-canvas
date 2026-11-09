@@ -45,9 +45,10 @@ Tell the user they can open the presented board, drag nodes, select one and resi
 double-click empty space to add a note, double-click a text note to edit Markdown, connect the
 side dots (with an optional label), and delete a selection. These edits save back to this file.
 The tab follows file changes automatically; malformed board source makes it read-only until fixed.
-When retained changes were overwritten, it lists the exact batches with **重新应用** and **忽略**.
-Reapply is the user's explicit choice, never an automatic merge; ignoring hides the warning in
-that tab only. `canvas_check` still reports retained overwritten user changes.
+When retained changes were overwritten, it describes them in the person's language with **重新应用** and **忽略**.
+Reapply is the user's explicit choice, never an automatic merge. Ignoring accepts the overwrite
+and removes those batches from the host journal; neither the tab nor `canvas_check` reports them again.
+The agent-facing `canvas_check` keeps exact operation JSON for changes still awaiting a decision.
 
 Board comment authoring is not available yet. Do not promise node/edge pins on boards; use the
 diagram preview's existing comment UI when an embedded diagram needs discussion.

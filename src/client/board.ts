@@ -26,6 +26,7 @@ export interface BoardHandle {
   readonly retryOps: readonly BoardOp[] | undefined
   readonly lost: readonly LostBatch[]
   submit(ops: readonly BoardOp[]): Promise<boolean>
+  decline(ids: readonly string[]): Promise<void>
   refresh(): Promise<void>
 }
 
@@ -208,5 +209,28 @@ export function useBoard(address: string, visible: boolean, runtime: BoardRuntim
     }
     return accepted
   }, [target])
-  return { load, contents, diagnostics, saving, refreshing, feedback, error, retryOps, lost, submit, refresh }
+  const decline = useCallback(async (ids: readonly string[]): Promise<void> => {
+    if (sending.current || target?.scope !== 'session' || !ids.length) return
+    sending.current = true
+    setSaving(true)
+    setError(undefined)
+    try {
+      const response = await fetch('api/canvas/board', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, signal: lifetimeRef.current?.signal,
+        body: JSON.stringify({ sessionId: target.sessionId, path: target.path, decline: ids }),
+      })
+      const body = await response.json() as { readonly declined: readonly string[] } | RouteFailure
+      if (!response.ok || !('declined' in body)) throw new Error(failureMessage(body as RouteFailure, response.status))
+    } catch (error) {
+      if (mounted.current) setError(messageOf(error))
+    } finally {
+      if (mounted.current) {
+        // The host owns recovery choices. Never hide a batch until its journal confirms removal.
+        await lossRef.current()
+        setSaving(false)
+      }
+      sending.current = false
+    }
+  }, [target])
+  return { load, contents, diagnostics, saving, refreshing, feedback, error, retryOps, lost, submit, decline, refresh }
 }

@@ -20,12 +20,15 @@ const noCAS = await mutant("{ kind: 'replaceIfVersion', version: info.version }"
 const skipValidity = await mutant('applyBoardOps(text, ops)', `applyBoardOps(text === 'broken' ? '{"nodes":[],"edges":[]}' : text, ops)`)
 const replayWrites = await mutant('if (edit.text === text)', 'if (false)')
 const journalSource = await readFile(new URL('../../src/host/board-journal.ts', import.meta.url), 'utf8')
-const record = "if (outcome.kind === 'done') this.record(path, ops, outcome.statuses)"
-assert.equal(journalSource.split(record).length, 2, 'journal changed: re-ground this mutation')
-const journalJS = stripTypeScriptTypes(journalSource.replace(record, ''))
-  .replace("'../shared/board-ops.ts'", JSON.stringify(new URL('../../src/shared/board-ops.ts', import.meta.url).href))
-  .replace("'./board-write.ts'", JSON.stringify(writerURL.href))
-const NoJournal = (await import(`data:text/javascript;base64,${Buffer.from(journalJS).toString('base64')}`)).BoardJournal
+async function journalMutant(before, after) {
+  assert.equal(journalSource.split(before).length, 2, 'journal changed: re-ground this mutation')
+  const js = stripTypeScriptTypes(journalSource.replace(before, after))
+    .replace("'../shared/board-ops.ts'", JSON.stringify(new URL('../../src/shared/board-ops.ts', import.meta.url).href))
+    .replace("'./board-write.ts'", JSON.stringify(writerURL.href))
+  return (await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)).BoardJournal
+}
+const NoJournal = await journalMutant("if (outcome.kind === 'done') this.record(path, ops, outcome.statuses)", '')
+const RetainDeclined = await journalMutant('.filter(batch => !declined.has(batch.id))', '.filter(() => true)')
 const note = id => ({ id, type: 'text', text: id, x: 0, y: 0, width: 100, height: 100 })
 const board = (...ids) => JSON.stringify({ nodes: ids.map(note), edges: [] })
 const ops = [{ op: 'addNote', ...note('person') }]
@@ -124,6 +127,59 @@ for (const Journal of [BoardJournal, NoJournal]) {
   }
   evidence.push({ scenario: Journal === BoardJournal ? 'policy-off detection and reapply' : 'no-journal scratch mutant',
     detectedBatches: lost.length, facts: fs.ids() })
+}
+for (const Journal of [BoardJournal, RetainDeclined]) {
+  const fs = new File()
+  const journal = new Journal()
+  assert.equal((await journal.apply(fs, target, target.displayPath, ops, signal)).kind, 'done')
+  fs.text = board('agent') // the same valid-text overwrite and decline path as RetainDeclined.cfg
+  fs.version++
+  const lost = journal.lost(target.displayPath, fs.text)
+  assert.equal(lost.length, 1)
+  const before = { text: fs.text, version: fs.version, writes: fs.writes }
+  await journal.decline(target.displayPath, [lost[0].id])
+  const expected = Journal === BoardJournal ? [] : [lost[0].id]
+  const afterDecline = journal.lost(target.displayPath, fs.text).map(batch => batch.id)
+  assert.deepEqual(afterDecline, expected)
+  assert.deepEqual({ text: fs.text, version: fs.version, writes: fs.writes }, before)
+  // Repeating a decline, including an absent ID, is successful and has no new effect.
+  await journal.decline(target.displayPath, [lost[0].id, 'absent-batch'])
+  assert.deepEqual(journal.lost(target.displayPath, fs.text).map(batch => batch.id), expected)
+  fs.text = board('agent', 'person')
+  fs.version++
+  assert.deepEqual(journal.lost(target.displayPath, fs.text), [])
+  fs.text = board('agent')
+  fs.version++
+  const afterLaterOverwrite = journal.lost(target.displayPath, fs.text).map(batch => batch.id)
+  assert.deepEqual(afterLaterOverwrite, expected)
+  evidence.push({ scenario: Journal === BoardJournal ? 'decline removes retained recovery' : 'retain-declined scratch mutant',
+    afterDeclineBatches: afterDecline, afterLaterOverwriteBatches: afterLaterOverwrite, facts: fs.ids() })
+}
+{
+  const fs = new File()
+  const other = new File()
+  const journal = new BoardJournal()
+  const otherPath = 'other.canvas'
+  const otherTarget = { targetKey: otherPath, displayPath: otherPath }
+  assert.equal((await journal.apply(fs, target, target.displayPath, ops, signal)).kind, 'done')
+  assert.equal((await journal.apply(fs, target, target.displayPath, [{ op: 'addNote', ...note('keep') }], signal)).kind, 'done')
+  assert.equal((await journal.apply(other, otherTarget, otherPath, ops, signal)).kind, 'done')
+  fs.text = other.text = board('agent')
+  fs.version++
+  other.version++
+  const lost = journal.lost(target.displayPath, fs.text)
+  const otherLost = journal.lost(otherPath, other.text)
+  assert.equal(lost.length, 2)
+  assert.equal(otherLost.length, 1)
+  const selected = lost.find(batch => batch.ops.some(op => op.id === 'person'))
+  const kept = lost.find(batch => batch.ops.some(op => op.id === 'keep'))
+  assert.ok(selected)
+  assert.ok(kept)
+  await journal.decline(target.displayPath, [selected.id, otherLost[0].id])
+  assert.deepEqual(journal.lost(target.displayPath, fs.text).map(batch => batch.id), [kept.id])
+  assert.deepEqual(journal.lost(otherPath, other.text), otherLost)
+  evidence.push({ scenario: 'decline is batch- and path-scoped',
+    remainingBatches: [kept.id], otherPathBatches: otherLost.map(batch => batch.id) })
 }
 {
   const fs = new File()

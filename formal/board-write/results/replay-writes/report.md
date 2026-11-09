@@ -20,4 +20,4 @@ The shortest path has 12 steps:
 12. the version is checked under the file lock: YourSave Replay wrote again, Agent Agent finished
 
 ## Rules that hold
-TypeOK, NoLostAcknowledgedChange, NoLostAgentChange, NoSilentLoss, NeverWritesOverInvalid, RoundsBounded, NoDeadlock, RouteTerminates, RecoveryEventually
+TypeOK, NoLostAcknowledgedChange, NoLostAgentChange, NoSilentLoss, DeclinedNeverReported, NeverWritesOverInvalid, RoundsBounded, NoDeadlock, RouteTerminates, RecoveryEventually

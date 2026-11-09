@@ -200,6 +200,47 @@ test('a blind agent overwrite is exposed as a recoverable lost user batch, then 
   assert.equal(nodeOf(text(), 'why').x, 600)
 })
 
+test('declining selected lost batches retires them from GET and canvas_check without changing the file', async () => {
+  const before = '{"nodes":[{"id":"why","type":"text","text":"Reason","x":0,"y":0,"width":280,"height":140},{"id":"flow","type":"text","text":"Flow","x":300,"y":0,"width":280,"height":140}],"edges":[]}'
+  const { post, get, check, fs, text, version } = harness({ [PATH]: before })
+  await post({ path: PATH, ops: [{ op: 'removeNodes', ids: ['flow'] }] })
+  await post({ path: PATH, ops: [{ op: 'place', id: 'why', x: 80, y: 40 }] })
+  fs.put(PATH, before)
+  const [deletion, movement] = (await get()).body.lost
+  assert.match((await check()).text, /removeNodes/)
+  assert.match((await check()).text, /"x":80/)
+  const unchangedVersion = version()
+  const decline = { sessionId: 'sess-1', path: 'plan.canvas', decline: [deletion.id] }
+  assert.deepEqual(await post(decline), { status: 200, body: { declined: [deletion.id] } })
+  assert.deepEqual((await get()).body.lost, [movement], 'other retained intent remains recoverable')
+  const report = (await check()).text
+  assert.doesNotMatch(report, /removeNodes/)
+  assert.match(report, /"x":80/)
+  assert.equal(text(), before, 'accepting the overwrite is not a file edit')
+  assert.equal(version(), unchangedVersion)
+  assert.deepEqual(await post(decline), { status: 200, body: { declined: [deletion.id] } }, 'retry by batch id is idempotent')
+  await post({ path: PATH, decline: [movement.id, 'already-absent'] })
+  assert.deepEqual((await get()).body, { lost: [] })
+  assert.doesNotMatch((await check()).text, /改动被覆盖/)
+  fs.put(PATH, before)
+  assert.deepEqual((await get()).body, { lost: [] }, 'another read/overwrite cannot resurrect declined intent')
+})
+
+test('decline validates batch ids and is scoped to the canonical board path', async () => {
+  const { post, get, fs } = harness()
+  await post({ path: PATH, ops: [{ op: 'removeNodes', ids: ['flow'] }] })
+  fs.put(PATH, BOARD)
+  const [batch] = (await get()).body.lost
+  for (const decline of [[], [''], [1], Array(201).fill('batch'), 'batch']) {
+    assert.equal((await post({ path: PATH, decline })).status, 400)
+  }
+  assert.equal((await post({ path: PATH, decline: [batch.id], ops: [{ op: 'removeEdge', id: 'e1' }] })).status, 400)
+  assert.equal((await post({ path: '/work/order.mmd', decline: [batch.id] })).status, 400)
+  assert.equal((await post({ path: 'plan.canvas', decline: [batch.id] })).status, 400)
+  assert.deepEqual(await post({ path: '/work/other.canvas', decline: [batch.id] }), { status: 200, body: { declined: [batch.id] } })
+  assert.deepEqual((await get()).body.lost, [batch])
+})
+
 test('new user moves supersede older positions without losing an earlier resize intent', async () => {
   const { post, get, fs, text } = harness()
   await post({ path: PATH, ops: [{ op: 'place', id: 'why', x: 600, y: 40, width: 320 }] })

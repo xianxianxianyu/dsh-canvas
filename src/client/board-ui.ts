@@ -1,6 +1,7 @@
 import { parseBoard, type Board, type Side } from '../shared/board.ts'
 import type { BoardOp } from '../shared/board-schema.ts'
 import type { Diagnostic } from '../shared/report.ts'
+import type { DocumentBodyProps } from './dsh.ts'
 
 /** A file read is authoritative: no position, size or text is merged from optimistic UI state. */
 export type BoardState =
@@ -42,9 +43,41 @@ export interface LostBatch {
   readonly ops: readonly BoardOp[]
 }
 
-/** Decline is local to this tab, not a claim that the host's retained intent disappeared. */
-export function visibleLosses(lost: readonly LostBatch[], dismissed: ReadonlySet<string>): readonly LostBatch[] {
-  return lost.filter(batch => !dismissed.has(batch.id))
+/** Human recovery copy only; the retained operations remain unchanged for replay and agent checks. */
+export function describeRecoveryOp(op: BoardOp, board: Board | undefined, t: DocumentBodyProps['t']): string {
+  const quote = (label: string): string => t('board.recovery.target', { label })
+  const nodeLabel = (id: string): string => {
+    const node = board?.nodes.find(candidate => candidate.id === id)
+    const label = node?.type === 'group' ? node.label?.trim()
+      : node?.type === 'file' ? node.file.split('/').at(-1)
+        : node?.type === 'text' ? firstLine(node.text) : undefined
+    return quote(label || id)
+  }
+  switch (op.op) {
+    case 'place':
+    case 'addNote': {
+      const size = (op.width === undefined ? '' : t('board.recovery.width', { width: op.width }))
+        + (op.height === undefined ? '' : t('board.recovery.height', { height: op.height }))
+      return t(`board.recovery.${op.op}`, { target: op.op === 'place' ? nodeLabel(op.id) : quote(firstLine(op.text) || op.id), x: op.x, y: op.y, size })
+    }
+    case 'setText': {
+      const text = firstLine(op.text)
+      return t('board.recovery.setText', { target: nodeLabel(op.id), text: text ? quote(text) : t('board.recovery.emptyText') })
+    }
+    case 'addEdge':
+      return t('board.recovery.addEdge', { edge: quote(op.label?.trim() || op.id), from: nodeLabel(op.fromNode), to: nodeLabel(op.toNode) })
+    case 'removeEdge': {
+      const edge = board?.edges.find(candidate => candidate.id === op.id)
+      return edge === undefined ? t('board.recovery.removeMissingEdge', { edge: quote(op.id) })
+        : t('board.recovery.removeEdge', { edge: quote(edge.label?.trim() || edge.id), from: nodeLabel(edge.fromNode), to: nodeLabel(edge.toNode) })
+    }
+    case 'removeNodes':
+      return t('board.recovery.removeNodes', { targets: op.ids.map(nodeLabel).join(t('board.recovery.separator')) })
+  }
+}
+
+function firstLine(text: string): string {
+  return text.trim().split(/[\r\n]/u, 1)[0]!.replace(/^#{1,6}(?:[ \t]+|$)/u, '').trim()
 }
 
 /** Works on the plain-http DSH web client too, where randomUUID is unavailable. */

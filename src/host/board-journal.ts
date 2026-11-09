@@ -56,13 +56,27 @@ export class BoardJournal {
    * it is not crash-atomic with the disk, and no journal entry is promised before success.
    */
   async apply(fs: Pick<FileSystem, 'stat' | 'readText' | 'writeText'>, target: FsTarget, path: string, ops: readonly BoardOp[], signal: AbortSignal): Promise<BoardWrite> {
-    const previous = this.pending.get(path) ?? Promise.resolve()
-    const current = previous.catch(() => {}).then(async () => {
+    return this.enqueue(path, async () => {
       signal.throwIfAborted()
       const outcome = await writeBoardOps(fs, target, ops, signal)
       if (outcome.kind === 'done') this.record(path, ops, outcome.statuses)
       return outcome
     })
+  }
+
+  /** Accept the overwrite: forget these batches, not merely their current loss report. */
+  async decline(path: string, ids: readonly string[]): Promise<void> {
+    await this.enqueue(path, () => {
+      const declined = new Set(ids)
+      const retained = (this.batches.get(path) ?? []).filter(batch => !declined.has(batch.id))
+      if (retained.length) this.batches.set(path, retained)
+      else this.batches.delete(path)
+    })
+  }
+
+  private async enqueue<T>(path: string, action: () => T | Promise<T>): Promise<T> {
+    const previous = this.pending.get(path) ?? Promise.resolve()
+    const current = previous.catch(() => {}).then(action)
     this.pending.set(path, current)
     try {
       return await current

@@ -110,7 +110,7 @@ stateDiagram-v2
     s80: Agent Agent write succeeded#59; records its version
     s81: Agent Agent finished
   }
-  state "YourSave Recovery declined#59; loss still flagged" as s82 {
+  state "YourSave Recovery declined#59; change stays absent" as s82 {
     s83: Agent Agent write succeeded#59; records its version
     s84: Agent Agent finished
   }
@@ -248,13 +248,13 @@ stateDiagram-v2
   s75 --> s70: the agent attempts its write or matching hunk edit
   s75 --> s71: the agent attempts its write or matching hunk edit
   s77 --> s78: the agent receives success
+  s80 --> s83: you decline#59; the host forgets this recovery
   s80 --> s81: the agent receives success
-  s80 --> s83: you decline recovery
   s59 --> s78: you receive done
   s59 --> s81: you receive done
   s71 --> s9: you reapply the detected change
-  s81 --> s84: you decline recovery
   s83 --> s84: the agent receives success
+  s81 --> s84: you decline#59; the host forgets this recovery
   s73 --> s10: you reapply the detected change
   s80 --> s47: the version is checked under the file lock
   s81 --> s49: the version is checked under the file lock

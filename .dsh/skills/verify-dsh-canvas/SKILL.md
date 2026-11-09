@@ -137,6 +137,11 @@ any other response exits 1, and missing arguments exit 2. It creates no session.
 
 The owner-only GET returns `{ lost: [{ id, at, ops, count }] }` for retained user-operation intent that would apply again to the current board; the helper supplies the encoded absolute `path` query. Use `--anonymous` to prove GET and POST both reject unauthenticated calls. The host retains only the last 20 active applied-operation batches per canonical board, supersedes older intent with newer successful user operations, and excludes dry-run `unchanged`, `missing` and `conflict` outcomes from loss reports. This is bounded, restart-sensitive detection, not overwrite prevention or durable undo. `canvas_check` in that host warns about losses; the board tab lists exact batches with 重新应用 and 忽略. Route replay alone is not verification of those buttons.
 
+Decline POST uses `{ sessionId?, path, decline: [batchId, ...] }` on that same owner-only route.
+It returns `{ declined: [...] }`, including already absent ids, without writing the board. After
+the person clicks 忽略, GET and the next same-host `canvas_check` must not report those batches.
+The banner uses localized human descriptions; exact operation JSON remains only in the agent check.
+
 ### Diagram preview through the omp browser
 
 `scripts/dev-ui.mjs` wraps the omp browser tab with the handles below. It opens the system Chrome headless, never the user's browser, with a scratch profile `ui.chromeProfile(run)` (`/tmp/dsh-canvas-chrome-<run name>-<hash>`). The profile sits outside `$OUT`, so listing the runs never lists scratch:
@@ -174,7 +179,7 @@ The full journeys are in [`features/diagram-preview.md`](features/diagram-previe
 | Archived | toast `会话已归档，可撤销或筛选已归档会话`. The id joins `global.archivedSessionIds` in `DEV_DATA/storages/workspace.json` |
 | Board tab | `[data-canvas-board]`, `data-readonly`; `ui.board` reads visible node bounds, edge paths, operation statuses, diagnostics and lost batches |
 | Board gestures | `ui.dragBoardNode`, `finishBoardDrag`, `resizeBoardNode`, `addBoardNote`, `connectBoardNodes`, `deleteBoardNode`, `deleteBoardEdge`; pointer helpers take screen-pixel deltas, note placement takes board coordinates |
-| Board editor/recovery | `[data-canvas-board-editor]` contains a textarea or optional edge-label input; `[data-canvas-lost="<id>"]` lists the exact batch and its 重新应用 / 忽略 buttons |
+| Board editor/recovery | `[data-canvas-board-editor]` contains a textarea or optional edge-label input; `[data-canvas-lost="<id>"]` describes the batch in the person's language with 重新应用 / 忽略 buttons; decline removes its host journal entry |
 
 ## Evidence
 

@@ -13,4 +13,4 @@ The shortest path has 5 steps:
 5. the version is checked under the file lock: YourSave Invalid board overwritten, Agent Agent will read
 
 ## Rules that hold
-TypeOK, NoLostAcknowledgedChange, NoLostAgentChange, NoSilentLoss, ReplaySafe, RoundsBounded, NoDeadlock, RouteTerminates, RecoveryEventually
+TypeOK, NoLostAcknowledgedChange, NoLostAgentChange, NoSilentLoss, DeclinedNeverReported, ReplaySafe, RoundsBounded, NoDeadlock, RouteTerminates, RecoveryEventually

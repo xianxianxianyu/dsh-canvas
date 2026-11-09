@@ -2,7 +2,7 @@
 EXTENDS Integers
 
 CONSTANTS MaxAttempts, AgentWrites, Requests, RouteCAS, RefreshObservation,
-          CheckValidity, SkipUnchanged, Policy, JournalEnabled
+          CheckValidity, SkipUnchanged, Policy, JournalEnabled, DeclineRemovesIntent
 
 \* One local fs provider / per-file lock. Every publication gets a fresh token.
 \* Facts 1..AgentWrites belong to the agent; fact 0 belongs to the person.
@@ -13,8 +13,8 @@ Facts == 0..AgentWrites
 Terminal == {"done", "busy", "invalid-source", "not-found", "timeout"}
 Active == {"stat", "read", "apply", "write", "retry", "journal", "reply"}
 Apply(facts) == facts \cup {0}
-\* BoardJournal.lost, board-journal.ts:97-104: pure dry-run on valid current text.
-\* route.ts:122-124 / check.ts:129-137 surface invalid source separately.
+\* BoardJournal.lost: pure dry-run on valid current text.
+\* GET /api/canvas/board and checkFile surface invalid source separately.
 JournalFlagsLoss == route.journal /\ file.valid /\ Apply(file.facts) # file.facts
 
 Init ==
@@ -28,7 +28,7 @@ Init ==
   /\ wroteOverInvalid = FALSE
   /\ replayChanged = FALSE
 
-\* Person's request: route.ts:126-142, BoardJournal.apply:58-71. Serialized per file.
+\* Person's request: handleBoard / BoardJournal.apply, serialized per file.
 YouSendBatch ==
   /\ route.phase = "idle"
   /\ route' = [route EXCEPT !.phase = "stat", !.round = 1, !.request = 1]
@@ -49,16 +49,18 @@ YouResendBatch ==
 
 \* A retained intent may be reapplied after detection, including another busy.
 \* Requests are serialized. Recovery reuses the last request slot, not a limit
-\* on the person's ability to retry. A decline is a local choice, not journal loss.
+\* on the person's ability to retry. Decline removes the selected retained batch.
 YouReapplyChange ==
   /\ route.phase \in Terminal /\ JournalFlagsLoss /\ ~route.declined
   /\ route' = [route EXCEPT !.phase = "stat", !.round = 1, !.steps = 0,
        !.changed = FALSE, !.request = IF @ < Requests THEN @ + 1 ELSE @]
   /\ UNCHANGED <<file, agent, acknowledged, wroteOverInvalid, replayChanged>>
 
+\* BoardJournal.decline resolves after removal in the same per-path queue as apply.
 YouDeclineRecovery ==
   /\ route.phase \in Terminal /\ JournalFlagsLoss /\ ~route.declined
-  /\ route' = [route EXCEPT !.declined = TRUE]
+  /\ route' = [route EXCEPT !.declined = TRUE,
+       !.journal = IF DeclineRemovesIntent THEN FALSE ELSE @]
   /\ UNCHANGED <<file, agent, acknowledged, wroteOverInvalid, replayChanged>>
 
 \* writeBoardOps step 1, board-write.ts:39-42.
@@ -109,15 +111,16 @@ RouteRetriesStale ==
           !.round = IF @ = MaxAttempts THEN @ ELSE @ + 1]
   /\ UNCHANGED <<file, agent, acknowledged, wroteOverInvalid, replayChanged>>
 
-\* BoardJournal.apply:62-64 and record:74-95. Record after writeBoardOps success,
-\* before HTTP acknowledgement; only applied operations create retained intent.
+\* BoardJournal.apply / record. Record after writeBoardOps success, before HTTP
+\* acknowledgement. Applied ops create a new batch, distinct from a declined one.
 RouteRecordsIntent ==
   /\ route.phase = "journal"
   /\ route' = [route EXCEPT !.phase = "reply", !.steps = @ + 1,
-       !.journal = (@ \/ (JournalEnabled /\ route.changed))]
+       !.journal = (@ \/ (JournalEnabled /\ route.changed)),
+       !.declined = IF JournalEnabled /\ route.changed THEN FALSE ELSE @]
   /\ UNCHANGED <<file, agent, acknowledged, wroteOverInvalid, replayChanged>>
 
-\* HTTP 200, route.ts:129-132; acknowledgement follows publication and record.
+\* HTTP 200 from handleBoard; acknowledgement follows publication and record.
 RouteAnswersDone ==
   /\ route.phase = "reply"
   /\ route' = [route EXCEPT !.phase = "done", !.steps = @ + 1]
@@ -217,7 +220,10 @@ NoLostAgentChange == (acknowledged \ {0}) \subseteq file.facts
 \* Detection is on inspection, not an instantaneous push notification. Invalid
 \* source is a visible validation error, not a dry-run loss result or a safe replay.
 NoSilentLoss == (0 \in acknowledged) =>
-  ((0 \in file.facts) \/ JournalFlagsLoss \/ ~file.valid)
+  ((0 \in file.facts) \/ JournalFlagsLoss \/ route.declined \/ ~file.valid)
+\* Removing intent prevents both current and future loss reports for that batch.
+\* A later applied request records a new batch and clears this batch's decline.
+DeclinedNeverReported == route.declined => ~route.journal
 NeverWritesOverInvalid == ~wroteOverInvalid
 ReplaySafe == ~replayChanged
 RoundsBounded == /\ route.round \in 0..MaxAttempts

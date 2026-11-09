@@ -37,4 +37,4 @@ The shortest path has 7 steps:
 7. the version is checked under the file lock: YourSave Agent acknowledged work lost / Invalid board overwritten, Agent Agent finished
 
 ## Rules that hold
-TypeOK, NoSilentLoss, ReplaySafe, RoundsBounded, NoDeadlock, RouteTerminates, RecoveryEventually
+TypeOK, NoSilentLoss, DeclinedNeverReported, ReplaySafe, RoundsBounded, NoDeadlock, RouteTerminates, RecoveryEventually

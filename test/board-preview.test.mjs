@@ -89,6 +89,11 @@ window.fetch = async (input, init) => {
   }
   const body = JSON.parse(init.body)
   window.posts.push(body)
+  if (body.decline) {
+    if (window.rejectDecline) return Response.json({ error: 'internal', message: 'Decline failed' }, { status: 500 })
+    window.losses = window.losses.filter(batch => !body.decline.includes(batch.id))
+    return Response.json({ declined: body.decline })
+  }
   if (window.busyNext) {
     window.busyNext = false
     return Response.json({ error: 'busy', message: 'busy: another writer changed the board' }, { status: 503, headers: { 'retry-after': '1' } })
@@ -429,7 +434,7 @@ test('busy retains the exact batch for an explicit retry, never a timer or file-
   }, { clock: true })
 })
 
-test('lost batches show exact intent and require an explicit reapply or persistent local dismissal', { skip }, async () => {
+test('lost batches require explicit reapply or host-confirmed decline', { skip }, async () => {
   const losses = [
     { id: 'lost-move', at: '2026-01-01T00:00:00Z', count: 1, ops: [{ op: 'place', id: 'a', x: 25, y: 45 }] },
     { id: 'lost-delete', at: '2026-01-01T00:00:01Z', count: 1, ops: [{ op: 'removeNodes', ids: ['b'] }] },
@@ -439,24 +444,45 @@ test('lost batches show exact intent and require an explicit reapply or persiste
     const removal = page.locator('[data-canvas-lost="lost-delete"]')
     await move.waitFor()
     await removal.waitFor()
-    assert.match(await move.textContent(), /"x":25/)
-    assert.match(await removal.textContent(), /removeNodes/)
+    assert.match(await move.textContent(), /Move “Original note” to \(25, 45\)/)
+    assert.match(await removal.textContent(), /Second note/)
+    assert.doesNotMatch(await move.textContent(), /"op"|"x":/)
+    assert.doesNotMatch(await removal.textContent(), /removeNodes/)
     assert.equal(await page.evaluate(() => window.posts.length), 0, 'discovering retained intent does not apply it')
     await removal.getByRole('button', { name: 'Dismiss', exact: true }).click()
-    assert.equal(await removal.count(), 0)
+    await removal.waitFor({ state: 'detached' })
+    assert.deepEqual(await page.evaluate(() => window.posts[0]), { sessionId: 'board-session', path: 'boards/plan.canvas', decline: ['lost-delete'] })
+    assert.deepEqual(await page.evaluate(() => window.losses.map(batch => batch.id)), ['lost-move'])
     const reads = await page.evaluate(() => window.lossReads)
     await page.evaluate(() => { window.changeFile(window.source) })
     await page.waitForFunction(reads => window.lossReads > reads, reads)
     await frames(page)
-    assert.equal(await removal.count(), 0, 'the same server batch stays dismissed after a source reread')
-    assert.equal(await move.count(), 1, 'dismissing one batch does not hide another')
-    assert.equal(await page.evaluate(() => window.posts.length), 0)
-    assert.equal(await node(page, 'b').count(), 1, 'dismiss has no filesystem effect')
+    assert.equal(await removal.count(), 0, 'declined intent stays absent after a source reread')
+    assert.equal(await move.count(), 1, 'declining one batch does not hide another')
+    assert.equal(await page.evaluate(() => window.posts.length), 1)
+    assert.equal(await node(page, 'b').count(), 1, 'decline has no filesystem effect')
 
     await move.getByRole('button', { name: 'Reapply', exact: true }).click()
-    assert.deepEqual((await savedPost(page, 1)).ops, losses[0].ops)
+    assert.deepEqual((await savedPost(page, 2)).ops, losses[0].ops)
     await waitBox(page, 'a', { x: 25, y: 45 })
     assert.equal(await node(page, 'b').count(), 1)
+  }, { losses })
+})
+
+test('a failed decline keeps the recovery choice visible for an explicit retry', { skip }, async () => {
+  const losses = [{ id: 'lost-delete', at: '2026-01-01T00:00:00Z', count: 1, ops: [{ op: 'removeNodes', ids: ['b'] }] }]
+  await withBoard(async page => {
+    const removal = page.locator('[data-canvas-lost="lost-delete"]')
+    await removal.waitFor()
+    await page.evaluate(() => { window.rejectDecline = true })
+    await removal.getByRole('button', { name: 'Dismiss', exact: true }).click()
+    await page.getByRole('alert').filter({ hasText: 'Decline failed' }).waitFor()
+    assert.equal(await removal.count(), 1)
+    assert.deepEqual(await page.evaluate(() => window.losses.map(batch => batch.id)), ['lost-delete'])
+    await page.evaluate(() => { window.rejectDecline = false })
+    await removal.getByRole('button', { name: 'Dismiss', exact: true }).click()
+    await removal.waitFor({ state: 'detached' })
+    assert.equal(await page.evaluate(() => window.posts.length), 2)
   }, { losses })
 })
 
