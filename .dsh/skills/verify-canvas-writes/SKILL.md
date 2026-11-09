@@ -14,8 +14,8 @@ acknowledged change, not whether a parser accepts arbitrary input.
 ## Coverage and synchronization
 
 **Source synchronization:** canvas same-commit subject
-`fix(canvas): honor declined board recovery` (`BoardJournal.apply` / `decline`,
-route/check integration and the existing-board edit rule); DSH source
+`fix(board): preserve untouched member source spans` (own-key rewrites preserve
+unknown values byte-for-byte; protocol and retained-intent model unchanged); DSH source
 `b830ec950faba0a46dda564be3e2d854afed94f1` (rc.5). The model, all configurations,
 scratch controls and recorded results were rerun together. The installed 0.2.2-rc.1 P1
 probe found the observation policy disabled, unlike that source default. Thus
@@ -183,6 +183,10 @@ synchronization assumptions; do not weaken the property. Report real defects
 before altering product behavior. Keep all controls failing after a redesign.
 Use upstream `maintain-formal-verification-skill` when reconciling unverified
 changes to covered code.
+
+Board rewrites copy untouched member source spans, including whitespace, multiline
+values and integer spellings outside JavaScript's exact-integer range. Only changed
+fields are serialized; prototype-member names never select a change implicitly.
 
 ## Limits
 

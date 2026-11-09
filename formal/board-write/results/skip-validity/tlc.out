@@ -1,18 +1,18 @@
 TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
 Warning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the "-XX:+UseParallelGC" property.
 (Use the -nowarning option to disable this warning.)
-Running breadth-first search Model-Checking with fp 0 and seed 1392585979791170112 with 1 worker on 12 cores with 8192MB heap and 64MB offheap memory [pid: 57888] (Mac OS X 27.0.1 aarch64, Eclipse Adoptium 25.0.5 x86_64, MSBDiskFPSet, DiskStateQueue).
+Running breadth-first search Model-Checking with fp 0 and seed -4362154461122438189 with 1 worker on 12 cores with 8192MB heap and 64MB offheap memory [pid: 85664] (Mac OS X 27.0.1 aarch64, Eclipse Adoptium 25.0.5 x86_64, MSBDiskFPSet, DiskStateQueue).
 Parsing file $CANVAS_REPO/formal/board-write/BoardWrite.tla
-Parsing file /private$TMPDIR/statechart-50o0nR/statechart-632DNP/tmp-verdict-1/Integers.tla
-Parsing file /private$TMPDIR/statechart-50o0nR/statechart-632DNP/tmp-verdict-1/Naturals.tla
+Parsing file /private$TMPDIR/statechart-2wjtjX/statechart-wwR4uv/tmp-verdict-1/Integers.tla
+Parsing file /private$TMPDIR/statechart-2wjtjX/statechart-wwR4uv/tmp-verdict-1/Naturals.tla
 Semantic processing of module Naturals
 Semantic processing of module Integers
 Semantic processing of module BoardWrite
-Starting... (2026-11-09 06:07:35)
+Starting... (2026-11-09 08:08:05)
 Implied-temporal checking--satisfiability problem has 2 branches.
 Computing initial states...
 Computed 2 initial states...
-Finished computing initial states: 4 distinct states generated at 2026-11-09 06:07:35.
+Finished computing initial states: 4 distinct states generated at 2026-11-09 08:08:05.
 Error: Invariant NeverWritesOverInvalid is violated.
 Error: The behavior up to this point is:
 State 1: <Initial predicate>
@@ -150,5 +150,5 @@ State 6: <RouteWritesVersion line 92, col 3 to line 104, col 27 of module BoardW
 111 states generated, 67 distinct states found, 21 states left on queue.
 The depth of the complete state graph search is 6.
 The average outdegree of the complete state graph is 1 (minimum is 0, the maximum 4 and the 95th percentile is 4).
-Finished in 00s at (2026-11-09 06:07:35)
+Finished in 00s at (2026-11-09 08:08:05)
 

@@ -8,7 +8,7 @@
  */
 import { parseBoard, type BoardLayout, type ValidBoard } from './board.ts'
 import type { BoardOp } from './board-schema.ts'
-import { plainOf, type JsonNode } from './json.ts'
+import type { JsonNode } from './json.ts'
 import type { Diagnostic } from './report.ts'
 
 /**
@@ -116,14 +116,13 @@ function applyOne(draft: Draft, op: BoardOp): OpStatus {
 }
 
 /**
- * The element as one compact line: untouched members keep their text (a multi-line value is
- * compacted), changed members are written with JSON.stringify, new members go last.
+ * Untouched members keep their exact source spans, including multiline extension values.
+ * Changed members use JSON.stringify; only separators between members are compacted.
  */
 function rewrite(text: string, element: JsonObject, changes: Readonly<Record<string, unknown>>): Splice {
   const members = element.members.map(member => {
-    if (member.key in changes) return `${JSON.stringify(member.key)}:${JSON.stringify(changes[member.key])}`
-    const raw = text.slice(member.value.start, member.value.end)
-    return `${text.slice(member.keySpan.start, member.keySpan.end)}:${/[\r\n]/u.test(raw) ? JSON.stringify(plainOf(member.value)) : raw}`
+    if (Object.hasOwn(changes, member.key)) return `${JSON.stringify(member.key)}:${JSON.stringify(changes[member.key])}`
+    return text.slice(member.keySpan.start, member.value.end)
   })
   for (const [key, value] of Object.entries(changes)) {
     if (!element.members.some(member => member.key === key)) members.push(`${JSON.stringify(key)}:${JSON.stringify(value)}`)

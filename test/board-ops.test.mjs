@@ -138,8 +138,19 @@ test('new elements follow the file: CRLF stays CRLF, empty and absent arrays are
     '{\n\t"nodes":[\n\t\t{"id":"n","type":"text","text":"hi","x":0,"y":0,"width":10,"height":10}\n\t]\n}')
 })
 
-test('a multi-line element becomes one line when touched; the rest of the file is left as written', () => {
+test('a touched multiline element compacts separators but preserves untouched member spans', () => {
   const pretty = '{\n  "nodes": [\n    {\n      "id": "a",\n      "type": "text",\n      "text": "A",\n      "x": 0, "y": 0, "width": 10, "height": 10\n    },\n    {"id": "b", "type": "text", "text": "B", "x": 0, "y": 20, "width": 10, "height": 10}\n  ]\n}\n'
   const { text } = applied(pretty, [{ op: 'place', id: 'a', x: 3, y: 4 }])
-  assert.equal(text, '{\n  "nodes": [\n    {"id":"a","type":"text","text":"A","x":3,"y":4,"width":10,"height":10},\n    {"id": "b", "type": "text", "text": "B", "x": 0, "y": 20, "width": 10, "height": 10}\n  ]\n}\n')
+  assert.equal(text, '{\n  "nodes": [\n    {"id": "a","type": "text","text": "A","x":3,"y":4,"width": 10,"height": 10},\n    {"id": "b", "type": "text", "text": "B", "x": 0, "y": 20, "width": 10, "height": 10}\n  ]\n}\n')
+})
+
+test('F4: untouched extension members retain prototype names and multiline numeric bytes', () => {
+  for (const key of ['custom', '__proto__', 'constructor', 'toString', 'hasOwnProperty']) {
+    const member = `"${key}" : {\n "externalId":9007199254740993,\n "escaped":"caf\\u00e9"\n}`
+    const source = `{"nodes":[{"id":"n","type":"text","text":"hi","x":0,"y":0,"width":100,"height":100,${member}}]}`
+    const result = applied(source, [{ op: 'place', id: 'n', x: 1, y: 2 }])
+    assert.ok(result.text.includes(member), `untouched ${key} member is byte-for-byte identical`)
+    assert.deepEqual(result.statuses, ['applied'])
+    assert.equal(applied(result.text, [{ op: 'place', id: 'n', x: 1, y: 2 }]).text, result.text)
+  }
 })
