@@ -20,6 +20,7 @@ The feature map in [`features/`](features/README.md) has one recipe per feature.
 - The dev UI cannot run side by side. There is one `canvas-dev` profile and one port per machine, shared by every checkout. Drive only a server you started yourself; when `doctor.mjs` shows 3996 taken by a server you did not start, wait or ask, never take it over.
 - Headless runs keep their sessions, storage, attachments and canvas root inside their own run directory, and the Chrome that `canvas_check` starts gets a fresh temporary profile from playwright. The only state they share is the `canvas-e2e` profile, whose composed `cordis.yml` dsh rewrites at every boot. Running them in parallel has not been tried; run them one after another.
 - The dev UI shares its session store and workspace list with the desktop app and with other agents' dev servers (`~/.dsh/sessions`, `~/.dsh/storages/workspace.json`). Every session you create appears in the user's app until you archive it. Rows you did not create belong to the user or another agent: never click them.
+- Each DSH process loads `workspace.json` into memory once, at boot, and rewrites the whole file on every change. storage-json does no cross-process locking: the last write wins. So when canvas-dev archives a session, it drops whatever any other running DSH process archived, pinned or added since canvas-dev booted. In the other direction, the next write from the desktop app or another dev server can un-archive yours. This happened in the phase 0 proof: a canvas-dev archive erased two archives that the town dev server had just made. `doctor.mjs` lists the processes that share the file (`shared`), `ui.archive` throws and names any entries it overwrote, and `leftovers.mjs` re-checks your ids at the end.
 
 Paths used below:
 
@@ -83,6 +84,7 @@ node $SKILL/scripts/doctor.mjs            # add --no-live to skip the model call
 | `build` | `lib/` is newer than every file in `src/` | `pnpm build` |
 | `link` | `canvas-dev` and `canvas-e2e` both resolve `dsh-canvas` to this checkout (WARN: the profile is missing and will be created) | `dsh plugin --profile <p> add link:$REPO`, on purpose |
 | `port` | 3996 is free, or a `--profile canvas-dev` server holds it | anything else on 3996 is not ours: stop |
+| `shared` | no other DSH host (the desktop app, another dev profile) holds `workspace.json` (WARN lists those that do) | not a failure. Expect archives to race with them; read the `ui.archive` and `leftovers.mjs` results |
 | `browser` | the Chrome or Edge that `canvas_check` will use, found by the plugin's own `src/host/browser.ts` | install Chrome; without it only `check-no-browser` and `check-text-only` can run |
 | `auth` | a one-line headless turn (`只回复 OK…`) completed through the account | `ACCOUNT_SIGN_IN_REQUIRED`: sign in once in the desktop app |
 
@@ -165,7 +167,7 @@ Proof standards:
 
 Do these in order after every journey, including failed attempts:
 
-1. **Archive what the run created.** In the UI, `await ui.archive(tab, run)` archives the session on screen and returns its id once the store lists it as archived. A conversation goes through its row menu (归档会话); a blank `新会话` goes through Meta+Alt+A. It refuses any session missing from `<run>/sessions.json`, so it cannot archive a session that belongs to the user or another agent. Log the id in `journey.log`.
+1. **Archive what the run created.** In the UI, `await ui.archive(tab, run)` archives the session on screen and returns its id once the store lists it as archived. A conversation goes through its row menu (归档会话); a blank `新会话` goes through Meta+Alt+A. It refuses any session missing from `<run>/sessions.json`, so it cannot archive a session that belongs to the user or another agent. Log the id in `journey.log`. When it throws with `overwrote another process's changes`, your archive still landed but erased the listed entries. Tell their owner (`doctor.mjs` names the processes) and record it in the trail.
 2. **Close your browser:** `await browser.close({ name: 'canvas-dev', kill: true })`.
 3. **Stop the dev server you started:** `write proc://canvas-dev-3996/kill` (outside omp, `kill <the pid you kept>`).
 4. **Clean up:** `node $SKILL/scripts/leftovers.mjs --clean $OUT/<run> …` stops processes whose command line names a run directory or its Chrome profile (they are ours by construction), removes that profile, and reports every session in `sessions.json` that is not archived. Pass run directories only (`ls -d $OUT/*/` lists exactly those).

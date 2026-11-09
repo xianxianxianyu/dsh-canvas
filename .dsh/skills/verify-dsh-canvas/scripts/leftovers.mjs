@@ -58,7 +58,7 @@ for (const run of runs) {
   if (!ours.length && !clean) report('OK', 'process', 'none name this run')
 
   for (const id of runSessions(run)) {
-    report(archived.has(id) ? 'OK' : 'FAIL', 'session', `${id} ${archived.has(id) ? 'archived' : 'NOT archived: open it again and run ui.archive(tab, run)'}`)
+    report(archived.has(id) ? 'OK' : 'FAIL', 'session', `${id} ${archived.has(id) ? 'archived' : 'NOT archived: open it again and run ui.archive(tab, run). If it was archived before, another DSH process (doctor.mjs "shared") rewrote workspace.json from a stale copy'}`)
   }
 
   // Scratch, not evidence: Chrome's profile for this run.

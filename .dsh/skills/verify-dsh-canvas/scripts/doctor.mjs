@@ -77,6 +77,16 @@ else {
   }
 }
 
+// 4b. Every DSH host process keeps ~/.dsh/storages/workspace.json in memory from its boot and
+// rewrites it whole (storage-json: no cross-process lock, last write wins). Archives made in
+// canvas-dev can be undone by the next write of any process listed here, and the reverse.
+const hosts = spawnSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8' }).stdout.split('\n')
+  .map(line => /^\s*(\d+)\s+(.*dsh-desktop-host\/lib\/(\S+)\.js.*)$/.exec(line)).filter(Boolean)
+  .map(([, pid, command, entry]) => ({ pid, profile: /--profile (\S+)/.exec(command)?.[1] ?? (entry === 'index' ? 'desktop app' : entry) }))
+  .filter(host => host.profile !== DEV_PROFILE)
+if (!hosts.length) report('OK', 'shared', 'no other DSH host shares ~/.dsh/storages/workspace.json')
+else report('WARN', 'shared', `workspace.json is also held in memory by ${hosts.map(host => `${host.profile} (pid ${host.pid})`).join(', ')}: an archive written by either side can be undone by the other's next write; ui.archive names entries it overwrote, leftovers.mjs re-checks yours`)
+
 // 5. The browser canvas_check will use, found by the plugin's own discovery code.
 const { browserCandidates, locateBrowser } = await import(join(REPO, 'src/host/browser.ts'))
 const found = locateBrowser(undefined, browserCandidates(process.platform, process.env, homedir()), existsSync)
