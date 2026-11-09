@@ -24,6 +24,8 @@ const ACTIVE: Readonly<Record<string, true>> = { script: true, iframe: true, fra
 const INTERACTIVE: Readonly<Record<string, true>> = { button: true, a: true, input: true, select: true, textarea: true }
 const URL_ATTRIBUTES: Readonly<Record<string, true>> = { src: true, href: true, poster: true, background: true, data: true, action: true, formaction: true, ping: true }
 const IMAGE_ELEMENTS: Readonly<Record<string, true>> = { img: true, image: true, feimage: true, input: true }
+/** Bound both the sanitizer walk and parse5's recursive serializer before either can exhaust JS. */
+const MAX_DEPTH = 256
 
 function viewportOf(value: string): MockViewport | undefined {
   const name = value.trim().toLowerCase()
@@ -58,7 +60,7 @@ export function parseMock(source: string): MockOutcome {
   }
   const ids = new Map<string, number>()
   const targets = new Map<string, undefined>()
-  const walk = (parent: Tree.ParentNode, inert = false): void => {
+  const walk = (parent: Tree.ParentNode, inert = false, depth = 0): void => {
     parent.childNodes = parent.childNodes.filter(node => {
       const offset = node.sourceCodeLocation?.startOffset ?? 0
       if (node.nodeName === '#comment' && 'data' in node) {
@@ -67,6 +69,10 @@ export function parseMock(source: string): MockOutcome {
         return false
       }
       if (!('tagName' in node)) return true
+      if (depth >= MAX_DEPTH) {
+        issue('error', `HTML 嵌套不能超过 ${MAX_DEPTH} 层`, offset)
+        return false
+      }
       const tag = node.tagName.toLowerCase()
       const attr = (name: string): string | undefined => node.attrs.find(item => item.name === name)?.value
       const at = (name: string): number => node.sourceCodeLocation?.attrs?.[name]?.startOffset ?? offset
@@ -79,7 +85,7 @@ export function parseMock(source: string): MockOutcome {
       if (ACTIVE[tag] === true) {
         issue('warning', `<${tag}> 已阻止并移除；界面稿只允许静态 HTML/CSS`, offset)
         // Still diagnose scripts/resources nested in removed browsing-context markup.
-        walk(node, true)
+        walk(node, true, depth + 1)
         return false
       }
       if (tag === 'meta' && attr('http-equiv') !== undefined) {
@@ -107,8 +113,8 @@ export function parseMock(source: string): MockOutcome {
           issue('warning', `<${tag}> 交互元素缺少 id 或 data-canvas-id，无法定位元素批注`, offset)
         }
       }
-      walk(node, inert || tag === 'head')
-      if (tag === 'template' && 'content' in node) walk((node as Tree.Template).content, true)
+      walk(node, inert || tag === 'head', depth + 1)
+      if (tag === 'template' && 'content' in node) walk((node as Tree.Template).content, true, depth + 1)
       return true
     })
   }

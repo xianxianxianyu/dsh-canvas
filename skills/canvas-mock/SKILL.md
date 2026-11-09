@@ -10,6 +10,7 @@ Write one screen per `name.mock.html` file. The compound suffix selects the 界�
 ## Compose the screen
 
 - Use a complete HTML document with `<!doctype html>`, UTF-8, a descriptive title, and CSS in `<style>` or `style` attributes.
+- Keep HTML nesting below 256 levels; deeper documents are rejected with a source location rather than partially rendered.
 - Set the intended viewport in the head: `<meta name="canvas-viewport" content="390x844">` for mobile or `1280x800` for desktop. Without a marker the default is desktop, 1280×800. The preview can switch to the desktop/mobile presets without editing the file; `canvas_check` uses the file's viewport.
 - Use real, specific copy: a plausible product name, meaningful field labels, useful errors, clear actions, and realistic data. Avoid lorem ipsum and rows of generic placeholders.
 - Keep one screen in each file, with deliberate hierarchy, spacing, typography, contrast and focus. Design for the declared dimensions; use `box-sizing: border-box` and responsive widths rather than hiding accidental horizontal overflow.

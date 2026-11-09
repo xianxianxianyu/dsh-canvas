@@ -102,3 +102,14 @@ test('mock comment outline targets either anchor attribute and cannot escape the
   assert.doesNotMatch(page.html, /<script>evil/u)
   assert.equal((page.html.match(/<\/style>/gu) ?? []).length, 1)
 })
+
+test('deep mock nesting reports a located error instead of overflowing the stack', () => {
+  const result = parseMock(html('<div>'.repeat(3000) + 'deep' + '</div>'.repeat(3000)))
+  assert.equal(result.ok, false)
+  const error = result.diagnostics.find(item => item.severity === 'error')
+  assert.match(error.message, /嵌套.*256/u)
+  assert.equal(error.line, 4)
+  assert.ok(error.column > 0)
+  assert.ok(error.snippet.includes('^'))
+  assert.equal(parsed(html('<div>'.repeat(100) + 'ordinary' + '</div>'.repeat(100))).ok, true)
+})
