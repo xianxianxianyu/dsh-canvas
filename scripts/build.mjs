@@ -23,6 +23,9 @@ await build({
 
 // DSH supplies React from its module table; never bundle a second React instance.
 const moduleTable = new Set(['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client'])
+// Browser-safe pure helpers DSH inlines into its own client bundles (tsdown.client.ts INLINE_SAFE);
+// they are not module-table rows, so the pinned copy is bundled here too.
+const inlineSafe = new Set(['@deepseek-ai/dsh-util-workspace-path'])
 const client = await build({
   absWorkingDir: root,
   entryPoints: ['src/client/index.tsx'],
@@ -41,6 +44,7 @@ const client = await build({
     setup(builder) {
       builder.onResolve({ filter: /^[^./]/ }, ({ path }) => {
         if (moduleTable.has(path)) return { path, external: true }
+        if (inlineSafe.has(path)) return undefined
         if (isBuiltin(path) || path.startsWith('@deepseek-ai/') || /^react(?:-dom)?(?:\/|$)/.test(path)) {
           throw new Error(`unsupported browser import: ${path}`)
         }

@@ -92,6 +92,38 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
+## zod 4.6.7 — MIT
+
+- Upstream: <https://github.com/colinhacks/zod>
+- Author: Colin McDonnell.
+- Locked version: `4.6.7` in `pnpm-lock.yaml`.
+- Bundled use: `src/shared/comment-schema.ts` defines the comment store format and the comment route's request with zod; the host imports it, so esbuild includes it in `lib/index.js` only. The browser module imports those types, never the schemas. zod has no production dependencies.
+- License source: the `zod` 4.6.7 package's `LICENSE`, reproduced verbatim below.
+
+```text
+MIT License
+
+Copyright (c) 2025 Colin McDonnell
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## pstack — MIT
 
 - Upstream: <https://github.com/cursor/plugins/tree/main/pstack>
@@ -128,7 +160,8 @@ SOFTWARE.
 - Upstream: <https://github.com/deepseek-ai/deepseek-harness>
 - Author: DeepSeek.
 - License source: upstream root `LICENSE`, reproduced verbatim below.
-- Derived integration material: `src/host/dsh.ts` and `src/client/dsh.ts` describe the DSH interfaces used by this plugin; `imageRoute` in `src/host/check.ts` follows the image-capability gate of DSH's `read_image` tool, and path resolution follows its file tools. This is an adapter, not a vendored copy of the DSH runtime.
+- Derived integration material: `src/host/dsh.ts` and `src/client/dsh.ts` describe the DSH interfaces used by this plugin; `imageRoute` in `src/host/check.ts` follows the image-capability gate of DSH's `read_image` tool, path resolution follows its file tools, and the comment route resolves a Session's relative paths against its header directory as DSH's workspace-files service does. This is an adapter, not a vendored copy of the DSH runtime.
+- Bundled package: `@deepseek-ai/dsh-util-workspace-path` 0.2.2-rc.1 (locked in `pnpm-lock.yaml`, same MIT license and copyright as below). `src/client/comments.ts` imports its `parseFileAddress` to read the previewed file's address; esbuild includes it in `lib/client.js`, as DSH inlines it into its own client bundles.
 
 ```text
 MIT License
@@ -156,6 +189,6 @@ SOFTWARE.
 
 ## Build and host dependency boundary
 
-`scripts/build.mjs` bundles the plugin's own source plus pele and yaml as described above. React and its JSX runtime are external browser modules supplied by DSH; DSH packages and playwright-core remain external in the host build. esbuild, TypeScript, Node/React type declarations, and their development dependencies are build tools, not code embedded into the plugin's runtime bundles. Their packages retain their own license files when installed. If a future change bundles another dependency, its applicable notice must accompany the resulting distribution.
+`scripts/build.mjs` bundles the plugin's own source plus pele, yaml and zod into the host module, and pele plus `@deepseek-ai/dsh-util-workspace-path` into the browser module, as described above. React and its JSX runtime are external browser modules supplied by DSH; other DSH packages and playwright-core remain external in the host build. esbuild, TypeScript, Node/React type declarations, and their development dependencies are build tools, not code embedded into the plugin's runtime bundles. Their packages retain their own license files when installed. If a future change bundles another dependency, its applicable notice must accompany the resulting distribution.
 
 The full, unmodified AGPL version-3 text in [LICENSE](LICENSE) is from <https://www.gnu.org/licenses/agpl-3.0.txt>, headed “Version 3, 19 November 2007”; the project's grant permits version 3 **or any later version**.
