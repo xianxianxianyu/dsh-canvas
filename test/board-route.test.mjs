@@ -296,3 +296,18 @@ test('journal retains at most the last bounded applied batches, not replays', as
   assert.equal(lost.length, BOARD_JOURNAL_LIMIT)
   assert.equal(lost[0].ops[0].id, 'n1')
 })
+
+test('F6: non-finite JSON numbers are located errors through parser, route and check', async () => {
+  for (const token of ['1e999', '-1e999', 'Infinity', 'NaN']) {
+    const source = `{\n"nodes":[{"id":"a","type":"text","text":"A","x":${token},"y":0,"width":100,"height":100}]}`
+    const parsed = parseBoard(source)
+    assert.equal(parsed.ok, false, token)
+    assert.equal(parsed.diagnostics[0].line, 2)
+    assert.equal(parsed.diagnostics[0].column, 49)
+    const h = harness({ [PATH]: source })
+    assert.equal((await h.get()).status, 409)
+    assert.equal((await h.post({ path: PATH, ops: [{ op: 'place', id: 'a', x: 1, y: 2 }] })).status, 409)
+    assert.equal(h.text(), source)
+    await assert.rejects(h.check(), /2:49/)
+  }
+})

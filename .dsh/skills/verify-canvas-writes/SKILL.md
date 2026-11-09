@@ -187,6 +187,8 @@ changes to covered code.
 Board rewrites copy untouched member source spans, including whitespace, multiline
 values and integer spellings outside JavaScript's exact-integer range. Only changed
 fields are serialized; prototype-member names never select a change implicitly.
+The JSON boundary rejects non-finite numbers, including overflowing exponents,
+with their source location before geometry or write operations run.
 
 ## Limits
 

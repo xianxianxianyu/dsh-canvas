@@ -128,7 +128,9 @@ export function parseJson(text: string): JsonParse {
     const number = NUMBER.exec(text)
     if (number) {
       at += number[0].length
-      return { kind: 'number', start, end: at, value: Number(number[0]) }
+      const numeric = Number(number[0])
+      if (!Number.isFinite(numeric)) fail('数字必须是有限值', start)
+      return { kind: 'number', start, end: at, value: numeric }
     }
     for (const [word, literal] of LITERALS) {
       if (text.startsWith(word, at)) {
