@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { render } from 'pele'
+import { forgetTextWidths, render } from 'pele'
 import { DIAGRAM_OPTIONS, renderDiagram } from '../src/shared/diagram.ts'
 
 const fixture = name => readFile(new URL(`fixtures/${name}`, import.meta.url), 'utf8')
@@ -38,16 +38,18 @@ test('a valid chart renders to SVG that keeps Mermaid ids and classes on its nod
 test('the SVG is the same with or without a canvas, as in the browser and in Node', async () => {
   const source = await fixture('statechart.mmd')
   const node = renderDiagram(source)
-  // pele measures labels with a canvas whenever one exists, as in every browser. A canvas that
-  // measures every character 50px wide changes pele's default output but not ours.
+  // pele measures labels with a canvas whenever one exists, as in every browser, and caches the
+  // measurer per font. A canvas that measures every character 50px wide changes pele's default
+  // output but not ours.
   const wide = { getContext: () => ({ font: '', measureText: text => ({ width: text.length * 50 }) }) }
   globalThis.OffscreenCanvas = function OffscreenCanvas() { return wide }
+  forgetTextWidths()
   try {
-    const withCanvas = render(source, { ...DIAGRAM_OPTIONS, measurer: undefined, fontFamily: 'canvas-probe' })
-    assert.ok(withCanvas.width > node.width, 'pele\'s default measurer follows the canvas')
+    assert.ok(render(source, { ...DIAGRAM_OPTIONS, measurer: undefined }).width > node.width, 'pele\'s default measurer follows the canvas')
     assert.equal(renderDiagram(source).svg, node.svg)
   } finally {
     delete globalThis.OffscreenCanvas
+    forgetTextWidths()
   }
   // And the fixed table is pele's own: in Node, without a canvas, pele's default gives the same SVG.
   assert.equal(render(source, { ...DIAGRAM_OPTIONS, measurer: undefined }).svg, node.svg)
