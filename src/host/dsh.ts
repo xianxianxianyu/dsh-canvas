@@ -1,15 +1,21 @@
 /** Only the rc.5 Host seams used here; no DSH runtime dependency is bundled. */
 
 export interface Agent {
-  readonly session: { requestHeader(): { readonly config?: { readonly provider?: string; readonly model?: string } } | undefined }
+  readonly session: {
+    readonly header: { readonly id: string }
+    snapshotEvents(): readonly { readonly type: string; readonly seq: number; readonly data: unknown }[]
+    requestHeader(): { readonly config?: { readonly provider?: string; readonly model?: string } } | undefined
+  }
   readonly options: { readonly provider?: string; readonly model?: string }
 }
 
 export interface ToolExecution {
   readonly signal: AbortSignal
   readonly agent?: Agent
-  /** The model's id for this call; a replayed call keeps it. */
+  /** Model-generated id, unique only within its durable invocation scope. */
   readonly callId: string
+  /** Native outer call id for PTC sub-dispatches. */
+  readonly rootCallId?: string
 }
 
 export type ContentBlock =

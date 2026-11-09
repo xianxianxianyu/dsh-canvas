@@ -33,7 +33,9 @@ async function harness(t) {
     const response = await route.fetch(new Request(`http://127.0.0.1:3996/api/canvas/comments?${new URLSearchParams(query)}`))
     return { status: response.status, body: await response.json() }
   }
-  const call = (args, callId) => tool.execute(args, { signal, callId, agent: { session: {}, options: {} } })
+  const call = (args, callId) => tool.execute(args, {
+    signal, callId, agent: { session: { header: { id: 'sess-1' }, snapshotEvents: () => [{ type: 'tool/call', seq: 1, data: { callId, name: 'canvas_comment' } }] }, options: {} },
+  })
   return { root, store, route, tool, post, get, call }
 }
 
@@ -133,6 +135,34 @@ test('canvas_comment replies and marks addressed; a replayed call adds nothing',
   assert.equal(comments[1].author, 'agent')
   assert.equal((await call({ path: 'order.mmd', id: 'u-1', reply: '再补一句' }, 'call-8')).text, '已回复批注 u-1。')
   assert.equal((await call({ path: 'order.mmd', id: 'u-1', status: 'addressed' }, 'call-9')).text, '批注 u-1 已经是已处理，没有改动。')
+})
+
+test('F5 reused provider call ids across sessions, turns and steps create distinct replies', async t => {
+  const { store, post, tool } = await harness(t)
+  await post({ path: ARTIFACT, ops: [{ op: 'create', id: 'u-1', text: '重试', anchor }] })
+  for (const [sessionId, seq, reply] of [['session-A', 1, 'first fix'], ['session-B', 1, 'second fix'], ['session-A', 2, 'third fix'], ['session-A', 3, 'fourth fix']]) {
+    const exec = {
+      signal, callId: 'call_0',
+      agent: { session: { header: { id: sessionId }, snapshotEvents: () => [{ type: 'tool/call', seq, data: { callId: 'call_0', name: 'canvas_comment' } }] }, options: {} },
+    }
+    const args = { path: ARTIFACT, id: 'u-1', reply }
+    assert.match((await tool.execute(args, exec)).text, /已回复/u)
+    assert.match((await tool.execute(args, exec)).text, /没有改动/u)
+  }
+  const replies = (await store.read(ARTIFACT)).comments.slice(1)
+  assert.deepEqual(replies.map(reply => reply.text), ['first fix', 'second fix', 'third fix', 'fourth fix'])
+  assert.equal(new Set(replies.map(reply => reply.id)).size, 4)
+})
+
+test('F5 conflicting replay does not ask the agent to change its thread id', async t => {
+  const { post, call } = await harness(t)
+  await post({ path: ARTIFACT, ops: [{ op: 'create', id: 'u-1', text: '重试', anchor }] })
+  await call({ path: ARTIFACT, id: 'u-1', reply: 'first' }, 'call_0')
+  await assert.rejects(call({ path: ARTIFACT, id: 'u-1', reply: 'different' }, 'call_0'), error => {
+    assert.doesNotMatch(error.message, /换一个 id/u)
+    assert.match(error.message, /同一次调用/u)
+    return true
+  })
 })
 
 test('canvas_comment refuses to resolve, reopen or delete, with a message that says why', async t => {

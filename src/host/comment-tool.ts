@@ -49,7 +49,7 @@ export interface CommentToolDeps {
 
 /**
  * The `canvas_comment` tool (public contract, PLAN section 6): the agent replies to a comment
- * and marks it addressed. A reply's id comes from the call id, so a replayed call adds nothing.
+ * and marks it addressed. A reply's id comes from its durable invocation, so replay adds nothing.
  * @param deps - the Session filesystem and directory, and the store shared with the route.
  * @returns the tool definition.
  */
@@ -75,12 +75,20 @@ export function canvasCommentTool(deps: CommentToolDeps): Tool<unknown, { readon
     async execute(raw, exec) {
       exec.signal.throwIfAborted()
       const args = parseCommentArgs(raw)
+      // DSH records tool/call before execution. Its seq is unique in the session, unlike a
+      // provider's callId; PTC sub-dispatches share the outer call seq but have distinct callIds.
+      // Capture before awaiting directory/filesystem work, while this invocation is current.
+      const session = exec.agent?.session
+      const invocation = args.reply === undefined ? undefined : session?.snapshotEvents().findLast(event =>
+        event.type === 'tool/call' && typeof event.data === 'object' && event.data !== null
+        && 'callId' in event.data && event.data.callId === (exec.rootCallId ?? exec.callId))
+      if (args.reply !== undefined && invocation === undefined) throw new Error('canvas_comment 回复需要会话中的工具调用记录；未写入批注。')
       const cwd = exec.agent === undefined ? undefined : await deps.workingDirectory.ensure(exec.agent, exec.signal)
       const artifact = await resolveArtifact(deps.fs, args.path, cwd, exec.signal)
       if (artifact.mode === undefined) throw new Error(`canvas_comment 只处理 ${SUFFIXES} 文件：${artifact.path}`)
       const ops: CommentOp[] = []
       if (args.reply !== undefined) {
-        const id = `a-${createHash('sha256').update(`${exec.callId}\0${args.id}`).digest('hex').slice(0, 12)}`
+        const id = `a-${createHash('sha256').update(JSON.stringify([session!.header.id, invocation!.seq, exec.callId, args.id])).digest('hex').slice(0, 32)}`
         ops.push({ op: 'reply', id, re: args.id, text: args.reply })
       }
       if (args.status !== undefined) ops.push({ op: 'status', id: args.id, status: args.status })
@@ -89,6 +97,7 @@ export function canvasCommentTool(deps: CommentToolDeps): Tool<unknown, { readon
         return { text: outcome(args, changed) }
       } catch (error) {
         if (error instanceof CommentRejected && error.code === 'missing') throw new Error(`${error.message}；先运行 canvas_check 看这个文件现在的批注和 id`)
+        if (error instanceof CommentRejected && error.code === 'conflict') throw new Error('同一次调用已经写入了不同的回复；先运行 canvas_check 查看现有回复，需要补充时请发起新的 canvas_comment 调用。')
         throw error
       }
     },
