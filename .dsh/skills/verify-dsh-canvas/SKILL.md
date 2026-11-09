@@ -116,6 +116,18 @@ node $SKILL/scripts/comments-route.mjs "<dsh web url>" post '<json body>'      #
 
 It trades the server's whole `dsh web:` URL for the signed cookie, as a browser does, and calls `/api/canvas/comments` on a running canvas-dev; `--anonymous` skips the cookie. It prints `HTTP <status>` and the JSON body, and creates no session.
 
+### The board route without a page
+
+```sh
+node $SKILL/scripts/board-route.mjs [--anonymous] "<dsh web url>" '<json body>'
+node $SKILL/scripts/board-route.mjs "<dsh web url>" -   # read {"path":"<abs>","ops":[…]} from stdin
+```
+
+Like the comment helper, it exchanges the whole server URL for the owner cookie. It POSTs to
+`/api/canvas/board` and prints `HTTP <status>` plus the response verbatim, including each operation's
+`applied`, `unchanged`, `missing` or `conflict` status. A 2xx response exits 0, any other response exits 1,
+and missing arguments exit 2. It creates no session.
+
 ### Diagram preview through the omp browser
 
 `scripts/dev-ui.mjs` wraps the omp browser tab with the handles below. It opens the system Chrome headless, never the user's browser, with a scratch profile `ui.chromeProfile(run)` (`/tmp/dsh-canvas-chrome-<run name>-<hash>`). The profile sits outside `$OUT`, so listing the runs never lists scratch:
@@ -205,5 +217,6 @@ All helpers live in `$SKILL/scripts/` and need Node 22.18 or later: `doctor.mjs`
 | `doctor.mjs` | `node $SKILL/scripts/doctor.mjs [--no-live]` | the readiness checks above | 0 ready, 1 not |
 | `run-headless.mjs` | `node $SKILL/scripts/run-headless.mjs [--model m] [--no-browser] [--name run] [--timeout s] [--cwd dir] [--canvas-root dir] <prompt \| ->` | one headless turn in `$OUT/<run>`; prints the session id and every `canvas_check` and `canvas_comment` result | 0 completed, 1 not, 2 usage or setup |
 | `comments-route.mjs` | `node $SKILL/scripts/comments-route.mjs [--anonymous] <dsh web url> get <path> \| post <json \| ->` | one call to the comment route of a running canvas-dev | 0 for 2xx, 1 otherwise, 2 usage |
+| `board-route.mjs` | `node $SKILL/scripts/board-route.mjs [--anonymous] <dsh web url> <json \| ->` | one POST to the board route; prints the raw response and every per-op status | 0 for 2xx, 1 otherwise, 2 usage |
 | `dev-ui.mjs` | `const ui = await import('$SKILL/scripts/dev-ui.mjs')` in an omp JS eval | `open`, `send`, `previewFile`, `sidebar`, `waitForSidebar`, `rendererMenu`, `chooseRenderer`, `shot`, `currentSession`, `archive`, `runSessions`, `archivedIds`, `chromeProfile`; for comments `comments`, `waitForComments`, `commentMode`, `escape`, `addComment`, `openComments`, `toggleFilter`, `threadAction` and the selector builders `node`, `pin`, `thread`, `filter`; `DEV_DATA`, and `SEL` (the handles) | throws with the step that timed out |
 | `leftovers.mjs` | `node $SKILL/scripts/leftovers.mjs [--clean] <run-dir>…` | the cleanup report, and with `--clean` the cleanup itself | 0 clean, 1 something left |
