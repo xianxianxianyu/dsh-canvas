@@ -5,12 +5,13 @@
  */
 import { z } from 'zod'
 import { SIDES } from './board.ts'
+import { ARTIFACT_ID_LIMIT, BOARD_EDGE_LABEL_LIMIT, BOARD_TEXT_LIMIT } from './limits.ts'
 
-const id = z.string().min(1).max(200)
+const id = z.string().min(1).max(ARTIFACT_ID_LIMIT)
 /** JSON Canvas positions and sizes are integers. */
 const coordinate = z.int().min(-10_000_000).max(10_000_000)
 const size = z.int().min(1).max(1_000_000)
-const text = z.string().max(20_000)
+const text = z.string().max(BOARD_TEXT_LIMIT)
 const color = z.string().regex(/^(?:[1-6]|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6})$/u, 'color 是 "1" 到 "6" 或 #rgb / #rrggbb')
 
 export const boardOpSchema = z.discriminatedUnion('op', [
@@ -21,7 +22,7 @@ export const boardOpSchema = z.discriminatedUnion('op', [
   z.strictObject({ op: z.literal('addNote'), id, text, x: coordinate, y: coordinate, width: size, height: size, color: color.optional() }),
   /** New note text, only while the note still reads `ifText`. */
   z.strictObject({ op: z.literal('setText'), id, text, ifText: text }),
-  z.strictObject({ op: z.literal('addEdge'), id, fromNode: id, toNode: id, fromSide: z.enum(SIDES).optional(), toSide: z.enum(SIDES).optional(), label: z.string().max(500).optional() }),
+  z.strictObject({ op: z.literal('addEdge'), id, fromNode: id, toNode: id, fromSide: z.enum(SIDES).optional(), toSide: z.enum(SIDES).optional(), label: z.string().max(BOARD_EDGE_LABEL_LIMIT).optional() }),
   z.strictObject({ op: z.literal('removeEdge'), id }),
   /** Remove nodes and every edge touching them. */
   z.strictObject({ op: z.literal('removeNodes'), ids: z.array(id).min(1).max(200) }),

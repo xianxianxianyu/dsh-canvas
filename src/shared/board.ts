@@ -6,6 +6,7 @@
 import { measureLabel } from './diagram.ts'
 import { sourceLocator, parseJson, type SourceLocator, type JsonMember, type JsonNode } from './json.ts'
 import { modeOf, type ModeId } from './modes.ts'
+import { ARTIFACT_ID_LIMIT, BOARD_TEXT_LIMIT } from './limits.ts'
 import type { Diagnostic } from './report.ts'
 
 export const SIDES = ['top', 'right', 'bottom', 'left'] as const
@@ -114,6 +115,7 @@ export function parseBoard(text: string): ParsedBoard {
     else if (idField.value.kind !== 'string' || !idField.value.value) problem(idField.value.start, `${where}的 id 必须是非空字符串`)
     else {
       id = idField.value.value
+      if (id.length > ARTIFACT_ID_LIMIT) problem(idField.value.start, `${where}的 id 最长 ${ARTIFACT_ID_LIMIT} 个字符`)
       const earlier = elements.get(id)
       if (earlier !== undefined) problem(idField.value.start, `id "${id}" 重复（第 ${locate(earlier.start).line} 行已经用过）`)
       else elements.set(id, item)
@@ -132,6 +134,7 @@ export function parseBoard(text: string): ParsedBoard {
     let node: BoardNode | undefined
     if (type === 'text') {
       const text = read.string('text', '文字节点', '（字符串）')
+      if (text !== undefined && text.length > BOARD_TEXT_LIMIT) problem(read.fields.get('text')!.value.start, `${name} 的 text 最长 ${BOARD_TEXT_LIMIT} 个字符`)
       if (text !== undefined) node = { id, type, text, ...box } as TextNode
     } else if (type === 'file') {
       const file = read.string('file', '文件节点', '（相对画板所在目录的路径）', true)

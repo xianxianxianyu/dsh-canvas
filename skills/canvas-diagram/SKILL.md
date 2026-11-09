@@ -9,6 +9,8 @@ A diagram is a plain Mermaid file: `name.mmd` (or `.mermaid`). Write only Mermai
 
 Invalid diagrams always report a line and column. If pele cannot locate the error, empty or unknown headers report `1:1`; diagram-size and edge-limit errors point at the diagram header line.
 
+Node ids are limited to 200 UTF-16 code units so they remain usable as comment anchors; longer ids fail the check. Labels can be longer, but a comment stores only the first 500 code units and drift compares that same prefix, so changes beyond it are not reported.
+
 ## Make it readable
 
 - Draw one question per chart. Aim for about 20 arrows or fewer; past that, split the chart or merge states that act the same.

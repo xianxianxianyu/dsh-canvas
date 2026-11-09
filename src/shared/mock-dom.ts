@@ -35,7 +35,7 @@ export function inspectMock(document: Document = globalThis.document): MockInspe
         text = textarea.value || textarea.placeholder
       } else if (element.tagName === 'IMG') text = (element as HTMLImageElement).alt
     }
-    text = text.replace(/\s+/gu, ' ').trim().slice(0, 500)
+    text = text.replace(/\s+/gu, ' ').trim()
     if (id) nodes.push({ id, label: text, boxes: [{ x: rect.x + window.scrollX, y: rect.y + window.scrollY, width: rect.width, height: rect.height }] })
     // Restrict the heuristic to elements with their own text, not every clipping ancestor around
     // an image or child layout. Scrollable containers are intentional and not diagnosed as clips.

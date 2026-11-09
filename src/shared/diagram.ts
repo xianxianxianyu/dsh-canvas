@@ -1,5 +1,8 @@
 import { detectType, PeleError, render, type RenderOptions, type TextMeasurer } from 'pele'
 import type { Diagnostic } from './report.ts'
+import { ARTIFACT_ID_LIMIT } from './limits.ts'
+import { locate } from './json.ts'
+import { diagramNodes } from './nodes.ts'
 
 /** Label font for every diagram, in the client preview and in the host screenshot alike. */
 export const DIAGRAM_FONT = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Segoe UI", sans-serif'
@@ -90,6 +93,10 @@ export const DIAGRAM_OPTIONS: RenderOptions = {
 export function renderDiagram(source: string): DiagramOutcome {
   try {
     const result = render(source, DIAGRAM_OPTIONS)
+    const diagnostics = diagramNodes(result.svg).filter(node => node.id.length > ARTIFACT_ID_LIMIT).map(node => ({
+      severity: 'error' as const, message: `图表节点 id 最长 ${ARTIFACT_ID_LIMIT} 个字符`, ...locate(source, Math.max(0, source.indexOf(node.id))),
+    }))
+    if (diagnostics.length) return { ok: false, diagnostics }
     return { ok: true, svg: result.svg, width: result.width, height: result.height, kind: result.mermaidType }
   } catch (error) {
     if (!(error instanceof PeleError)) throw error

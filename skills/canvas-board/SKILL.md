@@ -35,6 +35,7 @@ One node or one edge per line, tab indents, exactly like this. The user's board 
 - **Edges** have `id`, `fromNode` and `toNode` (node ids), and optionally `fromSide` / `toSide` (`top`, `right`, `bottom`, `left`; left out, the side facing the other node is used), `fromEnd` / `toEnd` (`none` or `arrow`; by default only the `to` end has an arrow) and `label`.
 - **`color`** on a node or an edge: `"1"` red, `"2"` orange, `"3"` yellow, `"4"` green, `"5"` cyan, `"6"` purple, or `#rrggbb`.
 - Ids are unique across nodes and edges. Use short, stable, readable ids (`flow`, `why`, `why-flow`) and never reuse an id for something else: the user's edits and comments find elements by id.
+- Node and edge ids are limited to 200 UTF-16 code units; a text note is limited to 20,000. These are check errors, not warnings: a passing board must fit the same limits as drag/delete/edit requests. Put longer notes in an embedded Markdown file.
 - Leave space between boxes: overlapping boxes are a warning. Size note boxes for their text: a box that cuts text off is a warning too.
 
 ## Editing a board the user is also editing

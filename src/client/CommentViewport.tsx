@@ -3,6 +3,7 @@ import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent a
 import type { UserOp } from '../shared/comment-schema.ts'
 import { isPending, type Thread } from '../shared/comments.ts'
 import type { Box, DiagramNode } from '../shared/nodes.ts'
+import { ARTIFACT_ID_LIMIT, COMMENT_LABEL_LIMIT } from '../shared/limits.ts'
 import { THEMES, type Page, type Scheme } from '../shared/page.ts'
 import { formatDiagnostic, type Diagnostic } from '../shared/report.ts'
 import { CommentList, statusColor, type StatusFilter } from './CommentList.tsx'
@@ -165,7 +166,7 @@ export function CommentViewport({ address, page, scheme, nodes, threads, comment
     // A click leaves the view as it was, including following the pane.
     setManual(start.manual)
     const node = nodes.find(candidate => candidate.id === start.node)
-    if (commenting && node !== undefined) setDraft(previous => previous?.node.id === node.id ? previous : { id: newCommentId(), node, text: '' })
+    if (commenting && node !== undefined && node.id.length <= ARTIFACT_ID_LIMIT) setDraft(previous => previous?.node.id === node.id ? previous : { id: newCommentId(), node, text: '' })
   }
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     if ((event.target as Element).closest('textarea, input') || event.metaKey || event.ctrlKey || event.altKey) return
@@ -189,7 +190,7 @@ export function CommentViewport({ address, page, scheme, nodes, threads, comment
   const submit = async (): Promise<void> => {
     if (draft === undefined || !draft.text.trim() || saving) return
     setSaving(true)
-    const op: UserOp = { op: 'create', id: draft.id, text: draft.text.trim(), anchor: { target: draft.node.id, label: draft.node.label } }
+    const op: UserOp = { op: 'create', id: draft.id, text: draft.text.trim(), anchor: { target: draft.node.id, label: draft.node.label.slice(0, COMMENT_LABEL_LIMIT) } }
     // The id stays with the draft, so pressing Enter again after a failure cannot create a second comment.
     const sent = await comments.apply([op])
     setSaving(false)

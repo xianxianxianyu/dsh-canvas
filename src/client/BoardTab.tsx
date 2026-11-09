@@ -8,6 +8,7 @@ import { boardNodePageHtml, boardColor, edgePath, EDGE_LABEL, THEMES, type Board
 import type { BoardOp } from '../shared/board-schema.ts'
 import { DIAGRAM_FONT } from '../shared/diagram.ts'
 import { formatDiagnostic } from '../shared/report.ts'
+import { BOARD_EDGE_LABEL_LIMIT, BOARD_TEXT_LIMIT } from '../shared/limits.ts'
 import type { BoardTabProps, DocumentBodyProps } from './dsh.ts'
 import { useBoard, type BoardHandle } from './board.ts'
 import { boardId, connectOp, describeRecoveryOp, placeOp, removeOps } from './board-ui.ts'
@@ -172,8 +173,8 @@ function BoardCanvas({ board, revision, handle, scheme, t }: { readonly board: B
       onKeyDown={event => { if (event.key === 'Escape') setDraft(undefined); if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); void saveDraft() } }}
       style={{ position: 'absolute', left: 12, right: 12, bottom: 12, zIndex: 1000, padding: 12, border: `1px solid ${THEMES[scheme].pele.border}`, borderRadius: 8, background: THEMES[scheme].pele.surface, boxShadow: '0 4px 20px #0004' }}>
       <label style={{ display: 'block', fontSize: 12 }}>{t(draft.kind === 'edge' ? 'board.label' : 'board.text')}
-        {draft.kind === 'edge' ? <input autoFocus aria-label={t('board.label')} maxLength={500} value={draft.text} onChange={event => { setDraft({ ...draft, text: event.target.value }) }} style={{ width: '100%', margin: '8px 0', color: 'inherit', background: 'transparent', border: '1px solid currentColor', padding: 6 }} />
-          : <textarea autoFocus aria-label={t('board.text')} rows={5} maxLength={20000} value={draft.text} onChange={event => { setDraft({ ...draft, text: event.target.value }) }} style={{ width: '100%', boxSizing: 'border-box', margin: '8px 0', color: 'inherit', background: 'transparent', border: '1px solid currentColor', padding: 6 }} />}
+        {draft.kind === 'edge' ? <input autoFocus aria-label={t('board.label')} maxLength={BOARD_EDGE_LABEL_LIMIT} value={draft.text} onChange={event => { setDraft({ ...draft, text: event.target.value }) }} style={{ width: '100%', margin: '8px 0', color: 'inherit', background: 'transparent', border: '1px solid currentColor', padding: 6 }} />
+          : <textarea autoFocus aria-label={t('board.text')} rows={5} maxLength={BOARD_TEXT_LIMIT} value={draft.text} onChange={event => { setDraft({ ...draft, text: event.target.value }) }} style={{ width: '100%', boxSizing: 'border-box', margin: '8px 0', color: 'inherit', background: 'transparent', border: '1px solid currentColor', padding: 6 }} />}
       </label>
       <button type="submit" style={button} disabled={!editable}>{t(draft.kind === 'edge' ? 'board.connect' : 'board.save')}</button>{' '}
       <button type="button" style={button} onClick={() => { setDraft(undefined) }}>{t('board.cancel')}</button>

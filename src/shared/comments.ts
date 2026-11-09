@@ -4,6 +4,7 @@
  * `comment-schema.ts` and are parsed at the host's boundaries before anything here runs.
  */
 import type { Anchor, Comment, CommentStatus, Reply, RootComment } from './comment-schema.ts'
+import { COMMENT_LABEL_LIMIT } from './limits.ts'
 
 /** A thread's states in order: the person opens it, the agent addresses it, the person resolves it. Zod-free, so the client may import it. */
 export const COMMENT_STATUSES = ['open', 'addressed', 'resolved'] as const
@@ -107,9 +108,10 @@ export interface Thread {
 
 function driftOf(anchor: Anchor | undefined, labels: ReadonlyMap<string, string | undefined>): Drift | undefined {
   if (anchor === undefined) return undefined
-  const now = labels.get(anchor.target)
-  if (now === anchor.label || (now === undefined && labels.has(anchor.target))) return undefined
-  const movedTo = anchor.label === '' ? [] : [...labels].filter(([id, label]) => id !== anchor.target && label === anchor.label).map(([id]) => id)
+  const now = labels.get(anchor.target)?.slice(0, COMMENT_LABEL_LIMIT)
+  const before = anchor.label.slice(0, COMMENT_LABEL_LIMIT)
+  if (now === before || (now === undefined && labels.has(anchor.target))) return undefined
+  const movedTo = before === '' ? [] : [...labels].filter(([id, label]) => id !== anchor.target && label?.slice(0, COMMENT_LABEL_LIMIT) === before).map(([id]) => id)
   return now === undefined ? { kind: 'gone', movedTo } : { kind: 'renamed', label: now, movedTo }
 }
 

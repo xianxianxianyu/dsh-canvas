@@ -1,5 +1,6 @@
 import { parse, serializeOuter, type DefaultTreeAdapterTypes as Tree } from 'parse5'
 import { sourceLocator } from './json.ts'
+import { ARTIFACT_ID_LIMIT } from './limits.ts'
 import type { Diagnostic } from './report.ts'
 
 export interface MockViewport { readonly width: number; readonly height: number }
@@ -99,7 +100,7 @@ export function parseMock(source: string): MockOutcome {
       const anchor = attr('data-canvas-id')?.trim() || id
       if (!inert && tag !== 'head' && tag !== 'html' && tag !== 'meta' && tag !== 'style' && tag !== 'template') {
         if (anchor) {
-          if (anchor.length > 200) issue('error', '批注锚点 id / data-canvas-id 最长 200 个字符', at(attr('data-canvas-id') ? 'data-canvas-id' : 'id'))
+          if (anchor.length > ARTIFACT_ID_LIMIT) issue('error', `批注锚点 id / data-canvas-id 最长 ${ARTIFACT_ID_LIMIT} 个字符`, at(attr('data-canvas-id') ? 'data-canvas-id' : 'id'))
           else if (targets.has(anchor)) issue('error', `重复批注锚点「${anchor}」；id 与 data-canvas-id 不能指向不同元素`, offset)
           else targets.set(anchor, undefined)
         } else if (INTERACTIVE[tag] === true || attr('role')?.toLowerCase() === 'button') {

@@ -5,6 +5,7 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 import { HeadlessBrowser, browserCandidates, locateBrowser } from '../src/host/browser.ts'
+import { anchorSchema } from '../src/shared/comment-schema.ts'
 
 const location = locateBrowser(undefined, browserCandidates(process.platform, process.env, homedir()), existsSync)
 const skip = location.kind === 'missing' && `no Chrome or Edge installed: ${location.reason}`
@@ -98,6 +99,18 @@ test('a comment can be written where crypto.randomUUID does not exist', { skip }
     assert.match(posts[0].ops[0].id, /^u-[0-9a-z]+-[0-9a-f]{8}$/)
     assert.deepEqual(posts[0].ops[0].anchor, { target: 's3', label: '支付失败' })
     assert.equal(await page.locator('[data-canvas-pin="s3"]').getAttribute('aria-label'), '1 条批注：支付失败')
+  })
+})
+
+test('F8 long diagram labels create route-valid snapshots without false drift', { skip }, async () => {
+  await withPreview(async page => {
+    await page.evaluate(() => window.show('flowchart LR\nn["' + 'x'.repeat(599) + '"]'))
+    await comment(page, 'n', 'fix')
+    const posts = await page.evaluate(() => window.posts)
+    assert.equal(posts[0].ops[0].anchor.label, 'x'.repeat(500))
+    assert.equal(anchorSchema.safeParse(posts[0].ops[0].anchor).success, true, 'the real route schema accepts the browser-built anchor')
+    await page.getByRole('button', { name: '批注列表', exact: true }).click()
+    assert.doesNotMatch(await page.locator('[data-canvas-comments]').innerText(), /的文字已从/u)
   })
 })
 
