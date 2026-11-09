@@ -13,7 +13,7 @@
 ## How to get to it (user POV)
 
 - Ask the agent for a diagram. The `canvas-diagram` skill makes it run `canvas_check` with `image: false` until the file passes, run it once more without `image` to look at the picture, and then call `present`.
-- Other plugins and agents call the tool by name with `{ path, image? }`, following the public contract in PLAN.md §6.
+- Other plugins and agents call the tool by name with `{ path, image? }`, following the [public tool contract](../../../../README.md#tools).
 
 ## Driving it with run-headless.mjs
 
@@ -52,9 +52,9 @@ The prompts below are verbatim.
 
 ## Gotchas
 
-- The model decides where its broken arrow goes. Check that `<line>:<col>` points at the arrow in `work/pay.mmd`; do not assume `4:6`. (Both recorded runs gave `4:6`.)
+- The model decides where its broken arrow goes. Check that `<line>:<col>` points at the arrow in `work/pay.mmd`; do not assume a fixed location.
 - The `tool_result` events in `events.ndjson` carry text only. The PNG is an image block in the session store, which the runner copies into the run directory. When a check reports `已出图` but no `check-<n>.png` appears, the attachment store moved: look at `run.patch.yml`'s `attachment-local` row.
-- Without the three auth rows the turn fails at once with `ACCOUNT_SIGN_IN_REQUIRED`. When the stores are not patched, that empty session also lands in `~/.dsh/sessions`, which happened once in unit 1.
+- Without the three auth rows the turn fails at once with `ACCOUNT_SIGN_IN_REQUIRED`. Without the store patches, even that empty session can land in the user's default session store; keep the isolated patches in place.
 - `deepseek-v4-pro` cannot see images. Never use it to prove `check-image`.
 - `canvas_check` starts its own headless Chrome through playwright, with a temporary `playwright_chromiumdev_profile-*` profile. It closes after 60 s idle or when dsh exits. Tests and other runs use the same kind of process, so never kill those by name.
 - A missing browser is not a failure. The check passes and says why there is no picture.

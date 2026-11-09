@@ -5,9 +5,10 @@ description: "Verify board-write concurrency in both DSH observation-policy mode
 
 # Verify canvas writes
 
-Read **statechart** first: `$HOME/.omp/agent/skills/statechart/SKILL.md`.
-Read every result with statechart, including its shortest counterexamples. This
-skill calls the installed tool; it does not copy TLC or the chart generator.
+Read your installed **statechart** skill first (or **pstack-statechart** from
+[pixel-town-pstack](https://github.com/xianxianxianyu/pixel-town-pstack)).
+Read every result with it, including its shortest counterexamples. This skill
+calls that tool; it does not copy TLC or the chart generator.
 TLA+ fits this target because the question is which interleaving loses an
 acknowledged change, not whether a parser accepts arbitrary input.
 
@@ -57,14 +58,14 @@ Function names remain authoritative when line numbers move.
 
 ## Run
 
-Prerequisites: Node 26 (or supported native-TypeScript Node), project dependencies,
-the installed statechart tool and its pinned **TLC 1.7.4 / Java Temurin 25** setup
-through mise. Consult statechart for installation/overrides. Rendering uses the
-plugin's Pele and local Chrome/Edge; it starts no DSH server and touches no DSH
-profile. Run from the canvas repository root:
+Prerequisites: Node 22.18+ or 24+, project dependencies, the installed statechart
+tool and its pinned **TLC 1.7.4 / Java Temurin 25** setup through mise. Consult
+statechart for installation/overrides; install missing tools only with consent.
+Rendering uses the plugin's Pele and local Chrome/Edge; it starts no DSH server
+and touches no DSH profile. Run from the canvas repository root:
 
 ```sh
-export STATECHART="$HOME/.omp/agent/skills/statechart/scripts/statechart"
+export STATECHART="/path/to/pixel-town-pstack/skills/pstack-statechart/scripts/statechart"
 OUT="$(mktemp -d)"
 node formal/board-write/run.mjs "$OUT" --record
 node formal/board-write/render.mjs "$OUT"

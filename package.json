@@ -1,7 +1,7 @@
 {
   "name": "dsh-canvas",
   "version": "0.1.0",
-  "description": "Agent-written diagrams for DSH: rendered beside the chat and checked by the agent with the same picture.",
+  "description": "File-based diagrams, boards and static UI mocks for DSH, with sidebar previews, comments and agent checks.",
   "license": "AGPL-3.0-or-later",
   "author": "xianxianxianyu",
   "repository": {
@@ -17,7 +17,9 @@
     "deepseek",
     "canvas",
     "mermaid",
-    "diagram"
+    "diagram",
+    "whiteboard",
+    "ui-mock"
   ],
   "type": "module",
   "exports": {
@@ -29,6 +31,8 @@
     "lib",
     "cordis.patch.yml",
     "skills",
+    "README.md",
+    "README.zh.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md"
   ],

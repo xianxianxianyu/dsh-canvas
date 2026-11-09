@@ -17,7 +17,7 @@ The feature map in [`features/`](features/README.md) has one recipe per feature.
 ## Ground rules
 
 - Never drive, reload or restart the user's desktop DeepSeek Harness app or its `desktop` profile. The dev server runs the same binary (`DeepSeek Harness`), so never kill anything by process name.
-- The default port is 3996, not exclusive ownership. Another local project may hold it: leave that process alone and select a free port with `PORT=`. Leave 3997 and 3998 alone; other projects use them.
+- The default port is 3996, not exclusive ownership. Another local project may hold it: leave that process alone and select a free port with `PORT=`. Never stop another project's listener.
 - Run `dsh` with `DSH_HOME` unset and with only `/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin` added to `PATH`; the helpers do this for you. Never put `runtime/bin` on `PATH`: its `node` is an Electron wrapper that breaks `node` in the agent's own bash.
 - Two canvas-dev instances cannot run side by side: they share a profile and isolated store even on different ports. Drive only a server you started yourself. A different project's listener does not block an independent canvas-dev on a free port; never take over or drive the other project's process.
 - Headless runs keep their sessions, storage, attachments and canvas root inside their own run directory, and the Chrome that `canvas_check` starts gets a fresh temporary profile from playwright. The only state they share is the `canvas-e2e` profile, whose composed `cordis.yml` dsh rewrites at every boot. Running them in parallel has not been tried; run them one after another.
@@ -58,7 +58,7 @@ bash  command: unset DSH_HOME; sh scripts/dev-server.sh
 ```
 
 If 3996 belongs to another local project, choose an observed free port, for example
-`PORT=3994 sh scripts/dev-server.sh`. Export that same `PORT` for `doctor.mjs` and
+`PORT=4000 sh scripts/dev-server.sh`. Export that same `PORT` for `doctor.mjs` and
 `leftovers.mjs`; both use the helper's shared port setting, defaulting to 3996.
 Set the service's ready port and unique name to the chosen port too. Browser and route
 helpers consume the server's actual URL, so do not rewrite it to the default port.
@@ -191,7 +191,7 @@ The full journeys are in [`features/diagram-preview.md`](features/diagram-previe
 
 ## Evidence
 
-Everything goes in `$OUT/<run>/`, outside the repo. `CANVAS_VERIFY_OUT` gathers a unit's runs in one place. Evidence holds local paths and session ids, so reference it from PLAN.md or reports by path; never commit it.
+Everything goes in `$OUT/<run>/`, outside the repo. `CANVAS_VERIFY_OUT` gathers a unit's runs in one place. Evidence holds local paths and session ids, so reference it only from private local notes; never commit it.
 
 Each headless run keeps these files:
 

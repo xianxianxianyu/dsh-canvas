@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { readFile, writeFile, readdir, mkdir, rm } from 'node:fs/promises'
+import { readFile, writeFile, readdir, mkdir, rm, realpath } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { resolve, join } from 'node:path'
@@ -53,8 +53,10 @@ await writeFile(join(out, 'summary.json'), JSON.stringify(summary, null, 2) + '\
 if (record) {
   // Only this command owns results/: discard obsolete generated traces on refresh.
   await rm(join(model, 'results'), { recursive: true, force: true })
+  const canonicalTemp = await realpath(tmpdir())
   const clean = text => text.replaceAll(root.replace(/\/$/, ''), '$CANVAS_REPO')
-    .replaceAll(out, '$OUT').replaceAll(homedir(), '$HOME').replaceAll(tmpdir(), '$TMPDIR')
+    .replaceAll(out, '$OUT').replaceAll(homedir(), '$HOME')
+    .replaceAll(canonicalTemp, '$TMPDIR').replaceAll(tmpdir(), '$TMPDIR')
   for (const [name] of cases) {
     const destination = join(model, 'results', name)
     await mkdir(destination, { recursive: true })

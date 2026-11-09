@@ -23,7 +23,7 @@ Preconditions:
 
 - Follow `../SKILL.md` Launch and Doctor with `DSH_HOME` unset. Build this checkout first. Use your configured `$CANVAS_VERIFY_OUT` as `$OUT` and unique `unit5-*` run names.
 - For the image/UI journey, doctor must find Chrome and a vision-capable model. For the no-browser journey explicitly use the runner's `--no-browser` option, not an uninstalled system browser.
-- Start only your own isolated canvas-dev on the selected `PORT` (default 3996); if another project holds it, follow Launch's `PORT=` procedure. Never touch the desktop app or ports 3997/3998.
+- Start only your own isolated canvas-dev on the selected `PORT` (default 3996); if another project holds it, follow Launch's `PORT=` procedure. Never touch the desktop app or another project's listener.
 
 - **Headless image, correction and delivery (`mock-image`, `mock-viewport`).** Run:
 

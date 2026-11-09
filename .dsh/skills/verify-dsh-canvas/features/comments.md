@@ -26,7 +26,7 @@ In the sidebar preview of a `.mmd` file the user turns on comment mode, clicks a
 - Open a presented `.mmd` with 在侧边栏预览 (see [diagram-preview.md](diagram-preview.md)). Click 💬 批注 at the top left of the drawing, or click the drawing and press C. Click a node, type, press Enter. Esc or the button leaves comment mode.
 - Click ☰ next to 批注, or a pin, to open the list. Use the three status buttons at its top to filter, and the buttons on a card to resolve, reopen or delete.
 - In the chat, say 看批注. The agent checks the chart, fixes it, and replies on each comment.
-- Other tools reach the same comments through `GET|POST /api/canvas/comments` (owner only) and the agent tools `canvas_check` and `canvas_comment` (public contract in PLAN.md §6).
+- Other tools reach the same comments through `GET|POST /api/canvas/comments` (owner only) and the agent tools `canvas_check` and `canvas_comment` ([public tool contract](../../../../README.md#tools)).
 
 ## Driving it with run-headless.mjs, comments-route.mjs and dev-ui.mjs
 
