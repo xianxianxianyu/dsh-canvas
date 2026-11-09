@@ -25,8 +25,8 @@ const localDenylist = 'check-public.local.txt'
 // The maintainer's public GitHub attribution address is intentionally publishable.
 const publicEmail = 'xianxianxianyu@users.noreply.github.com'
 const licenseEmails = new Map([
-  // Required verbatim attribution in the bundled yaml 2.9.1 ISC license only.
-  ['THIRD_PARTY_NOTICES.md', new Set(['eemeli\x40gmail.com'])],
+  // Required verbatim attribution in bundled yaml ISC and parse5 MIT licenses only.
+  ['THIRD_PARTY_NOTICES.md', new Set(['eemeli\x40gmail.com', 'ifaaan\x40gmail.com'])],
 ])
 
 function inspect(text, path) {

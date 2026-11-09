@@ -102,6 +102,8 @@ async function embed({ fs, path, signal }: BoardReadContext, node: FileNode): Pr
       }
       case 'board':
         return problem('warnings', `节点 ${node.id} 嵌入的是画板，只显示文件名，不展开（只展开一层）`, '画板，只显示文件名')
+      case 'mock':
+        return problem('warnings', `节点 ${node.id} 嵌入的是界面稿，请单独打开 .mock.html；画板只显示文件名`, '界面稿，只显示文件名')
       case 'other':
         return problem('warnings', `节点 ${node.id} 嵌入的 ${node.file} 画板显示不了，只显示文件名`, '画板显示不了，只显示文件名')
     }

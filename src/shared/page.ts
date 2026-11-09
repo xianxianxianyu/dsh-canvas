@@ -5,6 +5,7 @@
  */
 import { FILE_NODE, NOTE_TEXT, type BoardNode, type Scene, type SceneEdge } from './board.ts'
 import { DIAGRAM_FONT } from './diagram.ts'
+import type { MockDocument, MockViewport } from './mock.ts'
 
 export type Scheme = 'light' | 'dark'
 
@@ -77,7 +78,7 @@ export interface Page {
 }
 
 export interface PageOptions {
-  /** Node ids (pele's `data-id`) to frame with a dashed outline: the nodes with pending comments. */
+  /** Stable diagram or mock element ids to frame with a dashed outline. */
   readonly outline?: readonly string[]
 }
 
@@ -121,6 +122,24 @@ export function pageHtml(content: { readonly markup: string; readonly width: num
     width: Math.ceil(content.width) + 2 * PAGE_PADDING,
     height: Math.ceil(content.height) + 2 * PAGE_PADDING,
     background: THEMES[scheme].pele.bg,
+  }
+}
+
+/**
+ * A mock is its authored document at a fixed CSS viewport, not a padded diagram. The trusted
+ * prefix precedes even the author's <html style>: HTML5 merges its attributes onto the root.
+ */
+export function mockPage(mock: MockDocument, options: PageOptions & { readonly viewport?: MockViewport } = {}): Page {
+  const viewport = options.viewport ?? mock.viewport
+  const outline = options.outline?.length
+    ? `${options.outline.flatMap(id => [`[data-canvas-id=${cssString(id)}]`, `[id=${cssString(id)}]:not([data-canvas-id]),[id=${cssString(id)}][data-canvas-id=""]`]).join(',')}{outline:2.5px dashed ${THEMES.light.comment}!important;outline-offset:3px!important}`
+    : ''
+  const head = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"><meta http-equiv="x-dns-prefetch-control" content="off"><style>html{color-scheme:light}*,*::before,*::after{animation:none!important;transition:none!important}${outline}</style>`
+  return {
+    html: `<!doctype html>${head}${mock.html}`,
+    width: viewport.width,
+    height: viewport.height,
+    background: '#ffffff',
   }
 }
 

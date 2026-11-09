@@ -94,7 +94,7 @@ export function applyOps(comments: readonly Comment[], ops: readonly CommentOp[]
   return { ok: true, comments: current, changed: current !== comments }
 }
 
-/** How a comment's anchor relates to the diagram as drawn now. `movedTo` lists ids that carry the old label. */
+/** How an anchor relates to the current artifact. `movedTo` lists ids carrying the old label. */
 export type Drift =
   | { readonly kind: 'renamed'; readonly label: string; readonly movedTo: readonly string[] }
   | { readonly kind: 'gone'; readonly movedTo: readonly string[] }
@@ -105,21 +105,21 @@ export interface Thread {
   readonly drift?: Drift
 }
 
-function driftOf(anchor: Anchor | undefined, labels: ReadonlyMap<string, string>): Drift | undefined {
+function driftOf(anchor: Anchor | undefined, labels: ReadonlyMap<string, string | undefined>): Drift | undefined {
   if (anchor === undefined) return undefined
   const now = labels.get(anchor.target)
-  if (now === anchor.label) return undefined
+  if (now === anchor.label || (now === undefined && labels.has(anchor.target))) return undefined
   const movedTo = anchor.label === '' ? [] : [...labels].filter(([id, label]) => id !== anchor.target && label === anchor.label).map(([id]) => id)
   return now === undefined ? { kind: 'gone', movedTo } : { kind: 'renamed', label: now, movedTo }
 }
 
 /**
- * Group comments into threads in file order and compare each anchor with the drawn diagram.
+ * Group comments into threads in file order and compare each anchor with the current artifact.
  * @param comments - one artifact's comments.
- * @param labels - element id → visible label, from the current rendering.
+ * @param labels - element id → visible label; a present undefined value means layout is unmeasured.
  * @returns every thread, resolved ones included.
  */
-export function threadsOf(comments: readonly Comment[], labels: ReadonlyMap<string, string>): readonly Thread[] {
+export function threadsOf(comments: readonly Comment[], labels: ReadonlyMap<string, string | undefined>): readonly Thread[] {
   const replies = new Map<string, Reply[]>()
   for (const comment of comments) if (isReply(comment)) replies.set(comment.re, [...replies.get(comment.re) ?? [], comment])
   return comments.filter((comment): comment is RootComment => !isReply(comment)).map(root => {

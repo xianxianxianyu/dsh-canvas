@@ -15,6 +15,7 @@ export interface ModeMeta {
 export const MODES = {
   diagram: { extensions: ['mmd', 'mermaid'], skill: 'canvas-diagram', title: { zh: '图', en: 'Diagram' } },
   board: { extensions: ['canvas'], skill: 'canvas-board', title: { zh: '画板', en: 'Board' } },
+  mock: { extensions: ['mock.html'], skill: 'canvas-mock', title: { zh: '界面稿', en: 'UI mock' } },
 } as const satisfies Record<string, ModeMeta>
 
 export type ModeId = keyof typeof MODES

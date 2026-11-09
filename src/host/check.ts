@@ -1,16 +1,19 @@
 import { basename } from 'node:path'
+import type { Comment } from '../shared/comment-schema.ts'
 import { isPending, outlineTargets, threadsOf } from '../shared/comments.ts'
 import { renderDiagram } from '../shared/diagram.ts'
 import { MODES, SUFFIXES, type ModeId } from '../shared/modes.ts'
+import { parseMock } from '../shared/mock.ts'
+import type { MockInspection } from '../shared/mock-dom.ts'
 import { diagramNodes } from '../shared/nodes.ts'
-import { pageHtml, type Page } from '../shared/page.ts'
+import { mockPage, pageHtml, type Page } from '../shared/page.ts'
 import { formatCheck, type CommentsNote, type Diagnostic, type ImageNote } from '../shared/report.ts'
 import { resolveArtifact } from './artifact.ts'
 import { checkBoard } from './board-check.ts'
 import type { HeadlessBrowser, BrowserLocation } from './browser.ts'
 import type { CommentStore } from './comments.ts'
 import type { Agent, Attachments, FileSystem, ImageAttachment, Llm, Tool, ToolExecution, WorkingDirectory } from './dsh.ts'
-import { screenshot } from './raster.ts'
+import { renderMock, screenshot, type Screenshot } from './raster.ts'
 import type { BoardJournal } from './board-journal.ts'
 
 export type Checked =
@@ -21,8 +24,8 @@ export type Checked =
     readonly diagnostics: readonly Diagnostic[]
     /** A board's embedded files, one line each. */
     readonly embeds?: readonly string[]
-    /** Commentable element id → its visible label, for anchor drift. */
-    readonly labels: ReadonlyMap<string, string>
+    /** Commentable id → visible label; undefined means present but not measured. */
+    readonly labels: ReadonlyMap<string, string | undefined>
     /** The shared page, with these elements framed. */
     page(outline: readonly string[]): Page
   }
@@ -52,6 +55,19 @@ const HOST_MODES: { readonly [K in ModeId]: { check(source: string, context: Che
     },
   },
   board: { check: checkBoard },
+  mock: {
+    async check(source) {
+      const mock = parseMock(source)
+      if (!mock.ok) return mock
+      return {
+        ok: true,
+        detail: `${mock.document.viewport.width}×${mock.document.viewport.height} px`,
+        diagnostics: mock.diagnostics,
+        labels: mock.document.targets,
+        page: outline => mockPage(mock.document, { outline }),
+      }
+    },
+  },
 }
 
 export interface CheckArgs {
@@ -137,17 +153,28 @@ export async function checkFile(deps: CheckDeps, args: CheckArgs, exec: ToolExec
   }
   // Comments never change the verdict: a store that cannot be read becomes one line of the report.
   let comments: CommentsNote
+  let storedComments: readonly Comment[] | undefined
   let outline: readonly string[] = []
   try {
-    const threads = threadsOf((await deps.store.read(path)).comments, checked.labels).filter(isPending)
+    storedComments = (await deps.store.read(path)).comments
+    const threads = threadsOf(storedComments, checked.labels).filter(isPending)
     comments = { kind: 'threads', threads }
     outline = outlineTargets(threads)
   } catch (error) {
     comments = { kind: 'unreadable', reason: firstLine(error) }
   }
-  const picture = args.image
-    ? await pictureOf(deps, checked.page(outline), `${basename(path)}.png`, exec)
-    : { note: { kind: 'skipped', reason: '本次只校验（image: false）' } as const }
+  const picture: Picture = args.image
+    ? await pictureOf(deps, checked.page(outline), `${basename(path)}.png`, exec, mode === 'mock')
+    : { note: { kind: 'skipped', reason: '本次只校验（image: false）' } }
+  if (picture.inspection !== undefined) {
+    diagnostics.push(...picture.inspection.diagnostics)
+    if (storedComments !== undefined) {
+      // Hidden anchors still exist; only visible labels are known well enough to detect renaming.
+      const labels = new Map(checked.labels)
+      for (const node of picture.inspection.nodes) labels.set(node.id, node.label)
+      comments = { kind: 'threads', threads: threadsOf(storedComments, labels).filter(isPending) }
+    }
+  }
   const text = formatCheck({
     path, mode, ok: true, detail: checked.detail, diagnostics, image: picture.note, comments,
     ...checked.embeds === undefined ? {} : { embeds: checked.embeds },
@@ -155,35 +182,54 @@ export async function checkFile(deps: CheckDeps, args: CheckArgs, exec: ToolExec
   return picture.image === undefined ? { text } : { text, image: picture.image }
 }
 
-async function pictureOf(deps: CheckDeps, page: Page, name: string, exec: ToolExecution): Promise<{ readonly note: ImageNote; readonly image?: ImageAttachment }> {
-  const skipped = (reason: string) => ({ note: { kind: 'skipped', reason } as const })
+interface Picture {
+  readonly note: ImageNote
+  readonly image?: ImageAttachment
+  readonly inspection?: MockInspection
+}
+
+/** Attachment policy does not decide whether a mock needs Chrome layout inspection. */
+async function pictureGate(deps: CheckDeps, exec: ToolExecution): Promise<{ readonly ok: true; readonly attachments: Attachments } | { readonly ok: false; readonly reason: string }> {
   const route = await imageRoute(deps.llm(), exec.agent, exec.signal)
-  if (!route.ok) return skipped(route.reason)
+  if (!route.ok) return route
   const attachments = deps.attachments()
-  if (attachments === undefined) return skipped('DSH 没有挂载附件服务')
-  if (!attachments.imageLimits.mediaTypes.includes('image/png')) return skipped('当前部署不接受 PNG 图片')
+  if (attachments === undefined) return { ok: false, reason: 'DSH 没有挂载附件服务' }
+  if (!attachments.imageLimits.mediaTypes.includes('image/png')) return { ok: false, reason: '当前部署不接受 PNG 图片' }
+  return { ok: true, attachments }
+}
+
+async function pictureOf(deps: CheckDeps, page: Page, name: string, exec: ToolExecution, mock: boolean): Promise<Picture> {
+  const skipped = (reason: string): Picture => ({ note: { kind: 'skipped', reason } })
+  const gate = await pictureGate(deps, exec)
+  if (!gate.ok && !mock) return skipped(gate.reason)
   const location = deps.browser()
-  if (location.kind === 'missing') return skipped(location.reason)
-  let shot
+  if (location.kind === 'missing') return skipped(gate.ok ? location.reason : gate.reason)
+  let rendered: { readonly shot?: Screenshot; readonly inspection?: MockInspection }
   try {
-    shot = await deps.headless.use(location.path, browser => screenshot(browser, page, exec.signal))
+    rendered = await deps.headless.use(location.path, async browser => mock
+      ? renderMock(browser, page, exec.signal, gate.ok)
+      : { shot: await screenshot(browser, page, exec.signal) })
   } catch (error) {
     exec.signal.throwIfAborted()
-    return skipped(`无头浏览器截图失败：${firstLine(error)}`)
+    return skipped(gate.ok ? `无头浏览器截图失败：${firstLine(error)}` : `${gate.reason}；布局检查失败：${firstLine(error)}`)
   }
+  const { inspection } = rendered
+  if (!gate.ok) return { ...skipped(gate.reason), inspection }
+  // Both rendering paths capture a shot when the attachment gate admits one.
+  const shot = rendered.shot!
   let saved: ImageAttachment
   try {
-    saved = await attachments.saveImage({ data: shot.png, mediaType: 'image/png', name })
+    saved = await gate.attachments.saveImage({ data: shot.png, mediaType: 'image/png', name })
   } catch (error) {
     exec.signal.throwIfAborted()
-    return skipped(`图片未能保存：${firstLine(error)}`)
+    return { ...skipped(`图片未能保存：${firstLine(error)}`), inspection }
   }
   const image: ImageAttachment = {
     attachmentId: saved.attachmentId, mediaType: saved.mediaType, bytes: saved.bytes, width: saved.width, height: saved.height,
     ...saved.name === undefined ? {} : { name: saved.name },
     ...saved.originalDimensions === undefined ? {} : { originalDimensions: { width: saved.originalDimensions.width, height: saved.originalDimensions.height } },
   }
-  return { note: { kind: 'attached', width: image.width, height: image.height, scale: shot.scale }, image }
+  return { note: { kind: 'attached', width: image.width, height: image.height, scale: shot.scale }, image, inspection }
 }
 
 function firstLine(error: unknown): string {
@@ -205,12 +251,12 @@ export function canvasCheckTool(deps: CheckDeps): Tool<unknown, CheckValue> {
   const kinds = Object.values(MODES).map(mode => `${mode.title.zh}（${mode.extensions.map(extension => `.${extension}`).join(' ')}）`).join('、')
   return {
     name: 'canvas_check',
-    description: `校验 canvas 文件：${kinds}。有错时返回 isError，每个错误带 行:列 和出错片段；通过时在能看图的模型上附一张 PNG：图表和右侧栏预览出自同一份 HTML，画板是把嵌入的图、笔记、图片按位置排好的合成图（嵌入的文件也一起校验）。反复修改时传 image: false 只校验，定稿前不传 image 看一次图。不能出图时（模型不支持看图、找不到浏览器等）仍算通过，并写明「未出图」的原因。`,
+    description: `校验 canvas 文件：${kinds}。有错时返回 isError，每个错误带 行:列 和出错片段；通过时在能看图的模型上附一张 PNG：图表和右侧栏预览出自同一份 HTML，画板是把嵌入的图、笔记、图片按位置排好的合成图（嵌入的文件也一起校验）。mock 是离线、禁脚本的静态 HTML；默认有 Chrome 时检查真实布局的横向溢出、文字裁切和批注文字变化，即使模型不能看图也检查，但只有附件门禁允许时才截取和保存 PNG。传 image: false 只做静态校验，不启动 Chrome；定稿前不传 image 看一次图。不能出图时（模型不支持看图、找不到浏览器等）仍算通过，并写明「未出图」的原因。`,
     parameters: {
       type: 'object', additionalProperties: false,
       properties: {
         path: { type: 'string', description: `要检查的文件，${SUFFIXES}；相对路径按当前工作目录解析。` },
-        image: { type: 'boolean', description: '是否出图，默认 true；false 只校验。' },
+        image: { type: 'boolean', description: '是否出图，默认 true；false 只做静态校验，不启动 Chrome。mock 默认在有 Chrome 时检查布局，即使不能附图。' },
       },
       required: ['path'],
     },

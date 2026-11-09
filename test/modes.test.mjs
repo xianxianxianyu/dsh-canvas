@@ -28,5 +28,14 @@ test('a file belongs to the mode of its suffix, ignoring case and directories', 
   assert.equal(modeOf('design/Plan.Canvas'), 'board')
   assert.equal(modeOf('docs/chart.mmd.md'), undefined)
   assert.equal(modeOf('notes.md'), undefined)
-  assert.equal(SUFFIXES, '.mmd, .mermaid, .canvas')
+  assert.equal(SUFFIXES, '.mmd, .mermaid, .canvas, .mock.html')
+})
+
+test('mock claims its compound suffix only, never generic HTML', () => {
+  assert.equal(modeOf('login.mock.html'), 'mock')
+  assert.equal(modeOf('C:\\design\\Login.MOCK.HTML'), 'mock')
+  assert.equal(modeOf('login.html'), undefined)
+  assert.equal(modeOf('mock.html'), undefined)
+  assert.equal(modeOf('login.mock.html.txt'), undefined)
+  assert.deepEqual(MODES.mock.extensions, ['mock.html'])
 })

@@ -3,6 +3,7 @@ import { parseFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { MODES, MODE_IDS, type ModeId } from '../shared/modes.ts'
 import { DiagramPreview } from './DiagramPreview.tsx'
 import { BoardTab } from './BoardTab.tsx'
+import { MockPreview } from './MockPreview.tsx'
 import type { BoardRuntime, BoardTabProps, ClientContext, DocumentBodyProps, DocumentPreviewDefinition } from './dsh.ts'
 import { NS, en, zh } from './locales.ts'
 
@@ -20,6 +21,7 @@ type Surface =
 const SURFACES: { readonly [K in ModeId]: Surface } = {
   diagram: { kind: 'preview', loading: 'bytes-complete', Body: DiagramPreview },
   board: { kind: 'tab', Body: BoardTab },
+  mock: { kind: 'preview', loading: 'bytes-complete', Body: MockPreview },
 }
 
 export function apply(ctx: ClientContext): void {

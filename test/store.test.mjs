@@ -144,7 +144,7 @@ test('canvas_comment refuses to resolve, reopen or delete, with a message that s
   await assert.rejects(call({ path: 'order.mmd', id: 'u-1', delete: true }, 'c3'), { message: /agent 不能删除批注/u })
   await assert.rejects(call({ path: 'order.mmd', id: 'u-1' }, 'c4'), { message: /reply 或 status/u })
   await assert.rejects(call({ path: 'order.mmd', id: 'u-9', reply: '?' }, 'c5'), { message: /找不到批注 u-9/u })
-  await assert.rejects(call({ path: 'notes.md', id: 'u-1', reply: '?' }, 'c6'), { message: 'canvas_comment 只处理 .mmd, .mermaid, .canvas 文件：/work/notes.md' })
+  await assert.rejects(call({ path: 'notes.md', id: 'u-1', reply: '?' }, 'c6'), { message: 'canvas_comment 只处理 .mmd, .mermaid, .canvas, .mock.html 文件：/work/notes.md' })
   await post({ path: ARTIFACT, ops: [{ op: 'status', id: 'u-1', status: 'resolved' }] })
   await assert.rejects(call({ path: 'order.mmd', id: 'u-1', status: 'addressed' }, 'c7'), { message: /已被用户标记为已解决/u })
 })

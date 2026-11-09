@@ -9,7 +9,7 @@ import { COMMENT_STATUSES } from './comments.ts'
 const commentId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/u, 'id 只能用字母、数字、- 和 _，最长 64 个字符')
 const commentText = z.string().trim().min(1, '批注不能为空').max(4000, '批注最长 4000 个字符')
 
-/** The diagram element a comment points at: pele's `data-id`, and the label it showed then. */
+/** The artifact element a comment points at: diagram data-id or mock id/data-canvas-id, and its visible label. */
 export const anchorSchema = z.strictObject({
   target: z.string().min(1).max(200),
   label: z.string().max(500),

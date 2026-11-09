@@ -49,6 +49,7 @@ export type CheckReport =
 const PICTURE: { readonly [K in ModeId]: string } = {
   diagram: '与右侧栏预览同一页面',
   board: '嵌入的图、笔记、图片都按画板上的位置画出',
+  mock: '按文件视口截取首屏，与右侧栏预览同一页面',
 }
 
 /**
