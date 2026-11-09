@@ -98,3 +98,21 @@ test('a comment can be written where crypto.randomUUID does not exist', { skip }
     assert.equal(await page.locator('[data-canvas-pin="s3"]').getAttribute('aria-label'), '1 条批注：支付失败')
   })
 })
+
+test('after sending or cancelling a comment, Esc and C still drive comment mode', { skip }, async () => {
+  await withPreview(async page => {
+    const commenting = () => page.locator('[data-canvas-diagram]').getAttribute('data-canvas-commenting')
+    await comment(page, 's3', '失败后应该能直接重试')
+    assert.equal(await page.evaluate(() => document.activeElement?.hasAttribute('data-canvas-diagram')), true, 'focus is back on the diagram after sending')
+    await page.keyboard.press('Escape')
+    assert.equal(await commenting(), null, 'Esc leaves comment mode after sending')
+
+    await page.keyboard.press('c')
+    assert.equal(await commenting(), 'true', 'C enters comment mode again')
+    await page.locator('[data-canvas-node="s1"]').click()
+    await page.getByRole('button', { name: '取消', exact: true }).click()
+    assert.equal(await page.locator('[data-canvas-draft]').count(), 0)
+    await page.keyboard.press('Escape')
+    assert.equal(await commenting(), null, 'Esc leaves comment mode after cancelling')
+  })
+})

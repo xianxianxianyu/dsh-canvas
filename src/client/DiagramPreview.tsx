@@ -185,13 +185,18 @@ function Viewport({ page, scheme, nodes, threads, comments, t }: {
     }
   }
   const center = (factor: number): void => { zoom(factor, box.width / 2, box.height / 2) }
+  // The draft's textarea holds the focus; give it back to the pane, or C and Esc stop working.
+  const closeDraft = (): void => {
+    setDraft(undefined)
+    pane.current?.focus({ preventScroll: true })
+  }
 
   const submit = async (): Promise<void> => {
     if (draft === undefined || !draft.text.trim() || draft.saving) return
     setDraft({ ...draft, saving: true })
     const op: UserOp = { op: 'create', id: draft.id, text: draft.text.trim(), anchor: { target: draft.node.id, label: draft.node.label } }
     // The id stays with the draft, so pressing Enter again after a failure cannot create a second comment.
-    if (await comments.apply([op])) setDraft(undefined)
+    if (await comments.apply([op])) closeDraft()
     else setDraft(current => current === undefined ? current : { ...current, saving: false })
   }
 
@@ -276,14 +281,13 @@ function Viewport({ page, scheme, nodes, threads, comments, t }: {
               void submit()
             } else if (event.key === 'Escape') {
               event.preventDefault()
-              setDraft(undefined)
-              pane.current?.focus({ preventScroll: true })
+              closeDraft()
             }
           }}
           style={{ resize: 'vertical', font: 'inherit', fontSize: 13, padding: 6, borderRadius: 6, border: '1px solid color-mix(in srgb, currentColor 25%, transparent)', background: 'transparent', color: 'inherit' }} />
         {comments.saveError !== undefined && <div role="alert" style={{ fontSize: 12, color: red }}>{t('comment.saveFailed', { error: comments.saveError })}</div>}
         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-          <button type="button" style={{ ...button, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)' }} onClick={() => { setDraft(undefined) }}>{t('comment.cancel')}</button>
+          <button type="button" style={{ ...button, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)' }} onClick={closeDraft}>{t('comment.cancel')}</button>
           <button type="submit" disabled={draft.saving || !draft.text.trim()} style={{ ...button, background: red, color: '#fff', opacity: draft.saving || !draft.text.trim() ? 0.5 : 1 }}>{t('comment.send')}</button>
         </div>
       </form>}
