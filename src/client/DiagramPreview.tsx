@@ -11,16 +11,7 @@ import { useComments, type CommentsHandle } from './comments.ts'
 import type { DocumentBodyProps } from './dsh.ts'
 import { useTabState } from './tab-state.ts'
 
-// DSH sets the root `color-scheme` to the active theme's light or dark.
-function readScheme(): Scheme {
-  return getComputedStyle(document.documentElement).colorScheme.includes('dark') ? 'dark' : 'light'
-}
-
-function watchScheme(changed: () => void): () => void {
-  const observer = new MutationObserver(changed)
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] })
-  return () => { observer.disconnect() }
-}
+import { readScheme, watchScheme } from './scheme.ts'
 
 const decoder = new TextDecoder()
 

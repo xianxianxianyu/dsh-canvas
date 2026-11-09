@@ -35,6 +35,8 @@ const client = await build({
   format: 'cjs',
   target: 'es2023',
   jsx: 'automatic',
+  // React Flow's stylesheet travels inside the client module, not as an unserved sibling asset.
+  loader: { '.css': 'text' },
   write: false,
   minify: true,
   logLevel: 'warning',
