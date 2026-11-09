@@ -35,9 +35,22 @@ export const SEL = {
   /** dsh-canvas's preview: a sandboxed srcdoc iframe inside this element. */
   preview: '[data-canvas-diagram]',
   previewFrame: '[data-canvas-diagram] iframe',
-  /** dsh-canvas's error view, which replaces the preview while the file does not parse. */
-  previewError: '[data-slot="sidebar.right.pane.tab"] [role="alert"]',
+  /** dsh-canvas's error view, which replaces the preview while the file does not parse (comment alerts inside the preview are not it). */
+  previewError: '[data-slot="sidebar.right.pane.tab"] [role="alert"]:not([data-canvas-diagram] *)',
+  /** Comment mode toggle (button 批注), and the side list toggle (button 批注列表, its text ☰ and the pending count). */
+  commentMode: '[data-canvas-diagram] button[aria-label="批注"]',
+  commentList: '[data-canvas-diagram] button[aria-label="批注列表"]',
+  /** The side list; each thread in it is [data-canvas-thread="<id>"] with data-status. */
+  comments: '[data-canvas-comments]',
+  /** The form that opens on a clicked node in comment mode. */
+  draft: '[data-canvas-draft]',
 }
+
+/** A node's click box over the preview (comment mode), a node's pin, a thread, a status filter. */
+export const node = id => `[data-canvas-node="${id}"]`
+export const pin = id => `[data-canvas-pin="${id}"]`
+export const thread = id => `[data-canvas-thread="${id}"]`
+export const filter = status => `[data-canvas-filter="${status}"]`
 
 const NEW_PROMPT = /name="(.*)"/.exec(SEL.newPrompt)[1]
 const REPLY_PROMPT = /name="(.*)"/.exec(SEL.replyPrompt)[1]
@@ -162,6 +175,111 @@ export async function chooseRenderer(tab, name) {
   await rendererMenu(tab)
   await tab.click(`role/menuitem[name="${name}" exact]`)
   await sleep(800)
+}
+
+/**
+ * The preview's comment UI as the person sees it, or null without a preview: comment mode and its
+ * hint, the pending count on ☰, the pins, the open draft, and the side list when it is open (its
+ * filters and every visible thread with status, anchor label, text, author line, drift note,
+ * replies and buttons). `braces` is true when any of that text still holds a `{name}` placeholder.
+ */
+export async function comments(tab) {
+  return tab.evaluate(sel => {
+    const pane = document.querySelector(sel.preview)
+    if (!pane) return null
+    const text = element => element ? element.textContent.trim() : null
+    const draft = pane.querySelector(sel.draft)
+    const list = document.querySelector(sel.comments)
+    return {
+      commenting: pane.hasAttribute('data-canvas-commenting'),
+      hint: text(pane.querySelector('[role="status"]')),
+      pending: Number(text(pane.querySelector('button[aria-label="批注列表"]'))?.replace(/\D/g, '')),
+      pins: [...pane.querySelectorAll('[data-canvas-pin]')].map(pin => ({ node: pin.dataset.canvasPin, label: pin.getAttribute('aria-label'), count: Number(pin.textContent) })),
+      draft: draft && { title: text(draft.firstElementChild), text: draft.querySelector('textarea').value, placeholder: draft.querySelector('textarea').placeholder },
+      list: list && {
+        filters: [...list.querySelectorAll('[data-canvas-filter]')].map(button => ({ status: button.dataset.canvasFilter, on: button.getAttribute('aria-pressed') === 'true', text: text(button) })),
+        threads: [...list.querySelectorAll('[data-canvas-thread]')].map(thread => ({
+          id: thread.dataset.canvasThread,
+          status: thread.dataset.status,
+          label: text(thread.querySelector('header button')),
+          badge: text(thread.querySelector('[data-canvas-status]')),
+          text: text(thread.querySelector(':scope > p:not([role])')),
+          by: text(thread.querySelector(':scope > div:not([data-canvas-reply])')),
+          drift: text(thread.querySelector(':scope > p[role="note"]')),
+          replies: [...thread.querySelectorAll('[data-canvas-reply]')].map(reply => reply.innerText.replace(/\s*\n\s*/g, ' · ')),
+          buttons: [...thread.querySelectorAll('footer button')].map(text),
+        })),
+        empty: text(list.querySelector(':scope > div > p')),
+      },
+      braces: /\{\w+\}/.test([pane.innerText, list?.innerText ?? '', ...[...pane.querySelectorAll('[aria-label], [title], [placeholder]')].flatMap(e => [e.getAttribute('aria-label'), e.getAttribute('title'), e.getAttribute('placeholder')])].join('\n')),
+    }
+  }, SEL)
+}
+
+/** Wait until `test(await comments(tab))` holds, e.g. for the agent's reply to arrive (the preview polls every 3 s). */
+export async function waitForComments(tab, what, test, timeoutMs = 20_000) {
+  return poll(what, async () => { const state = await comments(tab); return state && test(state) ? state : undefined }, timeoutMs, 250)
+}
+
+// Input for the comment helpers goes through the tab's own page. After an omp tab.click in the
+// preview, the next tab.click or tab.press often failed with `Tab "canvas-dev" is busy` although the
+// click had landed; raw page input never did.
+const click = (tab, selector) => tab.run(async ({ page }, target) => { await page.click(target) }, { args: [selector] })
+const press = (tab, key) => tab.run(async ({ page }, name) => { await page.keyboard.press(name) }, { args: [key] })
+
+/**
+ * Turn comment mode on or off with the 批注 button, or with the C key after clicking an empty
+ * corner of the diagram (keys reach the preview only while it has the focus).
+ */
+export async function commentMode(tab, on, { via = 'button' } = {}) {
+  if ((await comments(tab)).commenting !== on) {
+    if (via === 'key') {
+      const corner = await tab.evaluate(sel => { const box = document.querySelector(sel).getBoundingClientRect(); return { x: box.left + 24, y: box.bottom - 24 } }, SEL.preview)
+      await tab.run(async ({ page }, x, y) => { await page.mouse.click(x, y) }, { args: [corner.x, corner.y] })
+      await press(tab, 'c')
+    } else await click(tab, SEL.commentMode)
+  }
+  return waitForComments(tab, `comment mode ${on ? 'on' : 'off'}`, state => state.commenting === on, 5000)
+}
+
+/** Press Escape where the focus is (in the preview it leaves comment mode). */
+export async function escape(tab) {
+  await press(tab, 'Escape')
+  return comments(tab)
+}
+
+/** In comment mode, click node `id`, type `text`, press Enter, and wait for its pin to count one more. Returns the draft as it showed, and the state after. */
+export async function addComment(tab, id, text) {
+  const count = state => state.pins.find(entry => entry.node === id)?.count ?? 0
+  const before = count(await comments(tab))
+  await click(tab, node(id))
+  const { draft } = await waitForComments(tab, `the draft on ${id}`, state => state.draft, 5000)
+  await tab.run(async ({ page }, target, words) => { await page.type(target, words) }, { args: [`${SEL.draft} textarea`, text] })
+  await press(tab, 'Enter')
+  const after = await waitForComments(tab, `a pin counting ${before + 1} on ${id}`, state => !state.draft && count(state) > before, 10_000)
+  return { draft, after }
+}
+
+/** Open the side list with ☰ unless it is open. */
+export async function openComments(tab) {
+  if (!(await comments(tab)).list) await click(tab, SEL.commentList)
+  return waitForComments(tab, 'the comment list', state => state.list, 5000)
+}
+
+/** Toggle one status filter of the side list (未处理 open, 已处理 addressed, 已解决 resolved). */
+export async function toggleFilter(tab, status) {
+  await click(tab, filter(status))
+  return comments(tab)
+}
+
+/** Press a thread's button by its text: 解决, 重开, 删除, then 确认删除 within 3 s. */
+export async function threadAction(tab, id, label) {
+  await tab.run(async ({ page }, target, text) => {
+    for (const button of await page.$$(`${target} footer button`)) {
+      if (await button.evaluate(element => element.textContent.trim()) === text) return button.click()
+    }
+    throw new Error(`dev-ui: ${target} has no ${text} button`)
+  }, { args: [thread(id), label] })
 }
 
 /** Full-page PNG at device scale, written straight to `file`. */

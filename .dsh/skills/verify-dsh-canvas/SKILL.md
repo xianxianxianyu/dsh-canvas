@@ -1,14 +1,14 @@
 ---
 name: verify-dsh-canvas
-description: "Drive dsh-canvas, the DSH plugin in this repo, the way a user does and keep the proof: the .mmd diagram preview in the right sidebar of the canvas-dev web UI (port 3996), opened from a present card, and the canvas_check tool through headless DSH. Use for the live check of every canvas unit, after changing the preview, canvas_check, a canvas-* skill or the plugin wiring, and whenever a live check misbehaves."
+description: "Drive dsh-canvas, the DSH plugin in this repo, the way a user does and keep the proof: the .mmd diagram preview in the right sidebar of the canvas-dev web UI (port 3996), opened from a present card, with comments pinned on its nodes; and the canvas_check and canvas_comment tools through headless DSH. Use for the live check of every canvas unit, after changing the preview, comments, canvas_check, a canvas-* skill or the plugin wiring, and whenever a live check misbehaves."
 ---
 
 # Verify dsh-canvas
 
 dsh-canvas has two user-facing surfaces:
 
-- **Diagram preview (web UI).** A DSH dev profile `canvas-dev` serves the web UI on `http://127.0.0.1:3996`. A user asks the agent for a diagram, the agent presents a `.mmd` file, and the user opens it from the present card into the right sidebar. There the 图 renderer draws it, and 纯文本 shows the source.
-- **`canvas_check` (agent tool).** The headless profile `canvas-e2e` answers one task and exits. The agent validates a file and, when the model can see images, gets the same picture the sidebar shows.
+- **Diagram preview (web UI).** A DSH dev profile `canvas-dev` serves the web UI on `http://127.0.0.1:3996`. A user asks the agent for a diagram, the agent presents a `.mmd` file, and the user opens it from the present card into the right sidebar. There the 图 renderer draws it, and 纯文本 shows the source. In comment mode the user pins comments on its nodes and resolves them in a side list.
+- **`canvas_check` and `canvas_comment` (agent tools).** The headless profile `canvas-e2e` answers one task and exits. The agent validates a file and, when the model can see images, gets the same picture the sidebar shows, with the user's pending comments listed and framed; it replies to them with `canvas_comment`.
 
 The feature map in [`features/`](features/README.md) has one recipe per feature. This file covers how to start, check, drive, prove and tear down.
 
@@ -99,13 +99,22 @@ The doctor ends with `doctor: ready` and exit 0, or `doctor: not ready` and exit
 
 ## Drive
 
-### `canvas_check` through headless DSH
+### `canvas_check` and `canvas_comment` through headless DSH
 
 ```sh
-node $SKILL/scripts/run-headless.mjs --name <run> [--model deepseek-v4-pro] [--no-browser] "<prompt>"
+node $SKILL/scripts/run-headless.mjs --name <run> [--model deepseek-v4-pro] [--no-browser] [--cwd <dir>] [--canvas-root <dir>] "<prompt>"
 ```
 
-The runner prints the run directory, the session id, the final reason, every `present` result, and each `canvas_check` call. For each call it shows the input, the status (`error` or `completed`), the verbatim result text, and the PNG it attached, copied out of the run's attachment store. It exits 0 only when the turn completed. The prompts and expected texts are in [`features/canvas-check.md`](features/canvas-check.md).
+The runner prints the run directory, the session id, the final reason, every `present` result, each `canvas_check` call and each `canvas_comment` call. For each check it shows the input, the status (`error` or `completed`), the verbatim result text, and the PNG it attached, copied out of the run's attachment store. It exits 0 only when the turn completed. `--cwd` lets a later turn work in an earlier run's `work/`, and `--canvas-root` points the plugin at a comment store the dev server shares; both must be directories inside `$OUT`. The prompts and expected texts are in [`features/canvas-check.md`](features/canvas-check.md) and [`features/comments.md`](features/comments.md).
+
+### The comment route without a page
+
+```sh
+node $SKILL/scripts/comments-route.mjs [--anonymous] "<dsh web url>" get <absolute .mmd path>
+node $SKILL/scripts/comments-route.mjs "<dsh web url>" post '<json body>'      # {"path": "<abs>", "ops": [...]}
+```
+
+It trades the server's whole `dsh web:` URL for the signed cookie, as a browser does, and calls `/api/canvas/comments` on a running canvas-dev; `--anonymous` skips the cookie. It prints `HTTP <status>` and the JSON body, and creates no session.
 
 ### Diagram preview through the omp browser
 
@@ -120,7 +129,7 @@ await ui.send(tab, `… 写 ${run}/work/order.mmd … 用 present 交付这个�
 await ui.previewFile(tab, `${run}/work/order.mmd`)   // the present card's 在侧边栏预览 button
 ```
 
-The full journey is in [`features/diagram-preview.md`](features/diagram-preview.md). These are the handles, checked against `canvas-dev` on DSH 0.2.2-rc.1:
+The full journeys are in [`features/diagram-preview.md`](features/diagram-preview.md) and [`features/comments.md`](features/comments.md). These are the handles, checked against `canvas-dev` on DSH 0.2.2-rc.1:
 
 | What | Handle |
 |---|---|
@@ -133,7 +142,11 @@ The full journey is in [`features/diagram-preview.md`](features/diagram-preview.
 | Renderer menu | CSS `[data-slot="sidebar.right.pane.tab"] button[aria-label="打开方式"]`, menu items `图` and `纯文本`. The selected item holds `svg[data-icon*="check"]` (there is no `aria-checked`) |
 | Rendered diagram | `[data-canvas-diagram] iframe`. Its `srcdoc` is the full page, labels included |
 | Zoom | buttons `缩小`, `原始大小` (labelled with the percentage), `放大`, `适应窗口`. Dragging inside `[data-canvas-diagram]` pans |
-| Parse error | `[data-slot="sidebar.right.pane.tab"] [role="alert"]`. The text starts with `这个文件画不出来：` |
+| Parse error | `SEL.previewError`: `[data-slot="sidebar.right.pane.tab"] [role="alert"]` outside `[data-canvas-diagram]` (the comment alerts inside it are not the parse error). The text starts with `这个文件画不出来：` |
+| Comment mode | button `批注` at the top left of the drawing (`aria-pressed`); `[data-canvas-diagram]` gets `data-canvas-commenting`, and `[role="status"]` shows the hint. The C key works while the drawing has the focus |
+| Comment targets | `[data-canvas-node="<id>"]`: one click box per node over the iframe, clickable only in comment mode. The draft is `[data-canvas-draft]`, titled `批注 · <label>`, with a textarea; Enter sends |
+| Pins | `[data-canvas-pin="<id>"]`, labelled `<n> 条批注：<label>`; clicking one opens the list on its thread |
+| Comment list | button `批注列表` (text `☰ <pending>`) opens `[data-canvas-comments]`: filters `[data-canvas-filter="open\|addressed\|resolved"]` (`aria-pressed`), threads `[data-canvas-thread="<id>"]` with `data-status`, replies `[data-canvas-reply]`, and footer buttons 解决, 重开, 删除 / 确认删除. `ui.comments(tab)` reads all of it |
 | Current session row | CSS `[role="treeitem"][aria-selected="true"][data-row-key^="session:"]`. `data-row-key` is `session:<id>`, which is how `ui.currentSession` reads the id. The accessible name is the title plus a relative time (`刚刚`, `1分钟`), and hovering adds action text, so never match rows by name |
 | Row menu | right-click the row: `置顶会话`, `重命名`, `分叉会话`, `复制 Session ID`, `在 Finder 中显示`, `归档会话` |
 | Blank session | title `新会话`. It has no row menu; Meta+Alt+A archives it |
@@ -149,7 +162,8 @@ Each headless run keeps these files:
 - `events.ndjson`: the `dsh --json` events
 - `stderr.log`
 - `final.txt`: the agent's last message
-- `canvas-check.txt`: every call, verbatim
+- `canvas-check.txt`: every `canvas_check` call, verbatim
+- `canvas-comment.txt`: every `canvas_comment` call, verbatim
 - `check-<n>.png`: the picture the model got
 - `summary.json`: session id, model, final reason, checks and presents
 - `work/`: the files the agent wrote
@@ -157,7 +171,7 @@ Each headless run keeps these files:
 
 Each UI journey keeps these files:
 
-- `sessions.json`: every session id the run created, recorded by `ui.open` (the page's blank session, which becomes the conversation once you send into it).
+- `sessions.json`: every session id the run created, recorded by `ui.open` (the blank session a page load created, which becomes the conversation once you send into it; a load that reopens an existing conversation records nothing).
 - `NN-<step>.png`: written by `ui.shot`, which saves a full-page PNG at 2000×1250. Capture the state after each action, not only the last screen.
 - `work/`: the file the agent wrote.
 - `journey.log`: you write one line per step, as `<step> | <action> | <observed value, verbatim> | <artifact>`. Include the id `ui.archive` returns.
@@ -189,6 +203,7 @@ All helpers live in `$SKILL/scripts/` and need Node 22.18 or later: `doctor.mjs`
 | Helper | Invocation | Does | Exit |
 |---|---|---|---|
 | `doctor.mjs` | `node $SKILL/scripts/doctor.mjs [--no-live]` | the readiness checks above | 0 ready, 1 not |
-| `run-headless.mjs` | `node $SKILL/scripts/run-headless.mjs [--model m] [--no-browser] [--name run] [--timeout s] <prompt \| ->` | one headless turn in `$OUT/<run>`; prints the session id and every `canvas_check` result | 0 completed, 1 not, 2 usage or setup |
-| `dev-ui.mjs` | `const ui = await import('$SKILL/scripts/dev-ui.mjs')` in an omp JS eval | `open`, `send`, `previewFile`, `sidebar`, `waitForSidebar`, `rendererMenu`, `chooseRenderer`, `shot`, `currentSession`, `archive`, `runSessions`, `archivedIds`, `chromeProfile`, `DEV_DATA`, and `SEL` (the handles) | throws with the step that timed out |
+| `run-headless.mjs` | `node $SKILL/scripts/run-headless.mjs [--model m] [--no-browser] [--name run] [--timeout s] [--cwd dir] [--canvas-root dir] <prompt \| ->` | one headless turn in `$OUT/<run>`; prints the session id and every `canvas_check` and `canvas_comment` result | 0 completed, 1 not, 2 usage or setup |
+| `comments-route.mjs` | `node $SKILL/scripts/comments-route.mjs [--anonymous] <dsh web url> get <path> \| post <json \| ->` | one call to the comment route of a running canvas-dev | 0 for 2xx, 1 otherwise, 2 usage |
+| `dev-ui.mjs` | `const ui = await import('$SKILL/scripts/dev-ui.mjs')` in an omp JS eval | `open`, `send`, `previewFile`, `sidebar`, `waitForSidebar`, `rendererMenu`, `chooseRenderer`, `shot`, `currentSession`, `archive`, `runSessions`, `archivedIds`, `chromeProfile`; for comments `comments`, `waitForComments`, `commentMode`, `escape`, `addComment`, `openComments`, `toggleFilter`, `threadAction` and the selector builders `node`, `pin`, `thread`, `filter`; `DEV_DATA`, and `SEL` (the handles) | throws with the step that timed out |
 | `leftovers.mjs` | `node $SKILL/scripts/leftovers.mjs [--clean] <run-dir>…` | the cleanup report, and with `--clean` the cleanup itself | 0 clean, 1 something left |
