@@ -6,13 +6,16 @@ import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
 import { HeadlessBrowser, browserCandidates, locateBrowser } from './browser.ts'
 import { canvasCheckTool } from './check.ts'
+import { canvasCommentTool } from './comment-tool.ts'
+import { CommentStore } from './comments.ts'
 import type { HostContext, SkillCandidate } from './dsh.ts'
+import { commentsRoute } from './route.ts'
 
 export const name = 'dsh-canvas'
 export const inject = ['tools', 'skills', 'fs', 'workingDirectory']
 
 export interface Config {
-  /** Absolute plugin data directory, outside the user's repository. */
+  /** Absolute plugin data directory, outside the user's repository; comments live in `<root>/comments/`. */
   readonly root: string
   /** Chrome or Edge executable for screenshots; when set, discovery is skipped. */
   readonly browserPath?: string
@@ -42,6 +45,8 @@ export function apply(ctx: HostContext, config: Config): void {
   const headless = new HeadlessBrowser()
   ctx.effect(() => () => headless.dispose(), 'canvas: headless browser')
   const candidates = browserCandidates(process.platform, process.env, homedir())
+  // The only writer of comments: the route and canvas_comment share it, so changes to one file run in order.
+  const store = new CommentStore(config.root)
   ctx.tools.register(canvasCheckTool({
     fs: ctx.fs,
     workingDirectory: ctx.workingDirectory,
@@ -49,7 +54,17 @@ export function apply(ctx: HostContext, config: Config): void {
     llm: () => ctx.get('llm'),
     browser: () => locateBrowser(config.browserPath, candidates, existsSync),
     headless,
+    store,
   }))
+  ctx.tools.register(canvasCommentTool({ fs: ctx.fs, workingDirectory: ctx.workingDirectory, store }))
+  ctx.inject(['connection', 'sessions'], scope => {
+    scope.connection.fetch.register(commentsRoute({
+      store,
+      fs: ctx.fs,
+      // Live Sessions first, then the stored header, as DSH resolves `dsh-resource://file/session/<id>/<path>`.
+      sessionCwd: async (id, signal) => (scope.sessions.get(id)?.header ?? (await scope.get('sessionPersistence')?.stat(id, { signal }))?.header)?.cwd,
+    }))
+  })
 
   ctx.skills.registerProvider(() => ({
     name: 'canvas',

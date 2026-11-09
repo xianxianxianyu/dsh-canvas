@@ -8,6 +8,8 @@ export interface Agent {
 export interface ToolExecution {
   readonly signal: AbortSignal
   readonly agent?: Agent
+  /** The model's id for this call; a replayed call keeps it. */
+  readonly callId: string
 }
 
 export type ContentBlock =
@@ -78,12 +80,42 @@ export interface SkillCandidate {
   readonly path: string
 }
 
+/** rc.5 ConnectionFetchRoute: one exact route below `/api`; DSH lets only owner Peers reach it. */
+export interface FetchRoute {
+  readonly path: string
+  readonly methods: readonly ('GET' | 'HEAD' | 'POST')[]
+  readonly requestBody: 'buffered'
+  readonly fetch: (request: Request) => Promise<Response>
+}
+
+export interface Connection {
+  readonly fetch: { register(route: FetchRoute): () => unknown }
+}
+
+/** The part of a Session header read here: its workspace directory, when it has one. */
+export interface SessionHeader {
+  readonly cwd?: string
+}
+
+export interface Sessions {
+  /** A live (loaded) Session, or undefined. */
+  get(id: string): { readonly header: SessionHeader } | undefined
+}
+
+export interface SessionPersistence {
+  /** A stored Session's header without reading its events, or undefined when there is none. */
+  stat(id: string, options?: { readonly signal?: AbortSignal }): Promise<{ readonly header: SessionHeader } | undefined>
+}
+
 export interface HostContext {
   readonly tools: { register<Args, Value>(tool: Tool<Args, Value>): () => void }
   readonly fs: FileSystem
   readonly workingDirectory: WorkingDirectory
   get(name: 'attachments'): Attachments | undefined
   get(name: 'llm'): Llm | undefined
+  get(name: 'sessionPersistence'): SessionPersistence | undefined
+  /** Run `callback` while the named services exist (web carriers have `connection`; headless runs do not). */
+  inject(names: readonly ['connection', 'sessions'], callback: (scope: HostContext & { readonly connection: Connection; readonly sessions: Sessions }) => void): unknown
   readonly skills: {
     registerProvider(factory: () => {
       readonly name: string

@@ -1,4 +1,4 @@
-# canvas_check, the canvas-* skills, and the diagram preview in the right sidebar.
+# canvas_check, canvas_comment, the canvas-* skills, and the diagram preview (with comments) in the right sidebar.
 - insert:
     - id: canvas
       name: dsh-canvas

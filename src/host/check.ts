@@ -1,15 +1,27 @@
 import { basename } from 'node:path'
+import { isPending, outlineTargets, threadsOf } from '../shared/comments.ts'
 import { renderDiagram } from '../shared/diagram.ts'
-import { MODES, SUFFIXES, modeOf, type ModeId } from '../shared/modes.ts'
+import { MODES, SUFFIXES, type ModeId } from '../shared/modes.ts'
+import { diagramNodes } from '../shared/nodes.ts'
 import { pageHtml, type Page } from '../shared/page.ts'
-import { formatCheck, type Diagnostic, type ImageNote } from '../shared/report.ts'
+import { formatCheck, type CommentsNote, type Diagnostic, type ImageNote } from '../shared/report.ts'
+import { resolveArtifact } from './artifact.ts'
 import type { HeadlessBrowser, BrowserLocation } from './browser.ts'
+import type { CommentStore } from './comments.ts'
 import type { Agent, Attachments, FileSystem, ImageAttachment, Llm, Tool, ToolExecution, WorkingDirectory } from './dsh.ts'
 import { screenshot } from './raster.ts'
 
 type Checked =
   | { readonly ok: false; readonly diagnostics: readonly Diagnostic[] }
-  | { readonly ok: true; readonly detail: string; readonly diagnostics: readonly Diagnostic[]; readonly page: Page }
+  | {
+    readonly ok: true
+    readonly detail: string
+    readonly diagnostics: readonly Diagnostic[]
+    /** Commentable element id → its visible label, for anchor drift. */
+    readonly labels: ReadonlyMap<string, string>
+    /** The shared page, with these elements framed. */
+    page(outline: readonly string[]): Page
+  }
 
 /** How the host validates and lays out each mode; the client keeps the matching preview map. */
 const HOST_MODES: { readonly [K in ModeId]: { check(source: string): Checked } } = {
@@ -21,8 +33,9 @@ const HOST_MODES: { readonly [K in ModeId]: { check(source: string): Checked } }
         ok: true,
         detail: `${diagram.kind}，${Math.ceil(diagram.width)}×${Math.ceil(diagram.height)} px`,
         diagnostics: [],
+        labels: new Map(diagramNodes(diagram.svg).map(node => [node.id, node.label])),
         // The model always gets the light page; the preview follows DSH's theme.
-        page: pageHtml({ markup: diagram.svg, width: diagram.width, height: diagram.height }, 'light'),
+        page: outline => pageHtml({ markup: diagram.svg, width: diagram.width, height: diagram.height }, 'light', { outline }),
       }
     },
   },
@@ -75,7 +88,8 @@ export interface CheckDeps {
   readonly attachments: () => Attachments | undefined
   readonly llm: () => Llm | undefined
   readonly browser: () => BrowserLocation
-  readonly headless: HeadlessBrowser
+  readonly headless: Pick<HeadlessBrowser, 'use'>
+  readonly store: CommentStore
 }
 
 export interface CheckValue {
@@ -91,19 +105,27 @@ export async function checkFile(deps: CheckDeps, args: CheckArgs, exec: ToolExec
   const { signal } = exec
   // Relative paths resolve against the Session's current directory, as DSH's file tools do.
   const cwd = exec.agent === undefined ? undefined : await deps.workingDirectory.ensure(exec.agent, signal)
-  const target = await deps.fs.resolve(args.path, { ...cwd === undefined ? {} : { cwd }, signal })
-  const path = deps.fs.processPath(target)
-  const mode = modeOf(path) ?? modeOf(args.path)
+  const { target, path, mode } = await resolveArtifact(deps.fs, args.path, cwd, signal)
   if (mode === undefined) throw new Error(`canvas_check 只检查 ${SUFFIXES} 文件：${target.displayPath}`)
   const info = await deps.fs.stat(target, signal)
   if (info === undefined) throw new Error(`找不到文件：${target.displayPath}`)
   if (info.type !== 'file') throw new Error(`不是普通文件：${target.displayPath}`)
   const checked = HOST_MODES[mode].check(await deps.fs.readText(target, signal))
   if (!checked.ok) throw new Error(formatCheck({ path, mode, ok: false, diagnostics: checked.diagnostics }))
+  // Comments never change the verdict: a store that cannot be read becomes one line of the report.
+  let comments: CommentsNote
+  let outline: readonly string[] = []
+  try {
+    const threads = threadsOf((await deps.store.read(path)).comments, checked.labels).filter(isPending)
+    comments = { kind: 'threads', threads }
+    outline = outlineTargets(threads)
+  } catch (error) {
+    comments = { kind: 'unreadable', reason: firstLine(error) }
+  }
   const picture = args.image
-    ? await pictureOf(deps, checked.page, `${basename(path)}.png`, exec)
+    ? await pictureOf(deps, checked.page(outline), `${basename(path)}.png`, exec)
     : { note: { kind: 'skipped', reason: '本次只校验（image: false）' } as const }
-  const text = formatCheck({ path, mode, ok: true, detail: checked.detail, diagnostics: checked.diagnostics, image: picture.note })
+  const text = formatCheck({ path, mode, ok: true, detail: checked.detail, diagnostics: checked.diagnostics, image: picture.note, comments })
   return picture.image === undefined ? { text } : { text, image: picture.image }
 }
 
