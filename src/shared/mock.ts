@@ -26,6 +26,7 @@ const URL_ATTRIBUTES: Readonly<Record<string, true>> = { src: true, href: true, 
 const IMAGE_ELEMENTS: Readonly<Record<string, true>> = { img: true, image: true, feimage: true, input: true }
 /** Bound both the sanitizer walk and parse5's recursive serializer before either can exhaust JS. */
 const MAX_DEPTH = 256
+const MAX_SANITIZE_ROUNDS = 4
 
 function viewportOf(value: string): MockViewport | undefined {
   const name = value.trim().toLowerCase()
@@ -40,10 +41,12 @@ function viewportOf(value: string): MockViewport | undefined {
 export function parseMock(source: string): MockOutcome {
   const locate = sourceLocator(source)
   const diagnostics: Diagnostic[] = []
+  let reparsed = false
   const issue = (severity: Diagnostic['severity'], message: string, offset = 0): void => {
+    if (reparsed && diagnostics.some(item => item.severity === severity && item.message === message)) return
     diagnostics.push({ severity, message, ...locate(offset) })
   }
-  const tree = parse(source, {
+  let tree = parse(source, {
     sourceCodeLocationInfo: true,
     // Match both renderers: scripts are disabled, so <noscript> contains ordinary markup.
     scriptingEnabled: false,
@@ -118,8 +121,23 @@ export function parseMock(source: string): MockOutcome {
       return true
     })
   }
-  walk(tree)
-  if (diagnostics.some(item => item.severity === 'error')) return { ok: false, diagnostics }
-  const root = tree.childNodes.find((node): node is Tree.Element => 'tagName' in node && node.tagName === 'html')!
-  return { ok: true, document: { html: serializeOuter(root), viewport: viewport ?? MOCK_VIEWPORTS.desktop, targets }, diagnostics }
+  let previous: string | undefined
+  for (let round = 0; round < MAX_SANITIZE_ROUNDS; round++) {
+    ids.clear()
+    targets.clear()
+    walk(tree)
+    if (diagnostics.some(item => item.severity === 'error')) return { ok: false, diagnostics }
+    const root = tree.childNodes.find((node): node is Tree.Element => 'tagName' in node && node.tagName === 'html')!
+    const html = serializeOuter(root)
+    // A sanitized tree is not necessarily safe HTML: HTML5 namespace/form repair can expose
+    // markup during serialization. Accept only a re-parsed, re-sanitized fixed point.
+    if (html === previous) return { ok: true, document: { html, viewport: viewport ?? MOCK_VIEWPORTS.desktop, targets }, diagnostics }
+    previous = html
+    // Later-round warnings point at the file boundary: these nodes did not exist in the source
+    // tree, so generated offsets must never be presented as original source locations.
+    reparsed = true
+    tree = parse(html, { scriptingEnabled: false })
+  }
+  issue('error', `HTML 在 ${MAX_SANITIZE_ROUNDS} 次安全重解析后仍不稳定；请简化嵌套结构`)
+  return { ok: false, diagnostics }
 }

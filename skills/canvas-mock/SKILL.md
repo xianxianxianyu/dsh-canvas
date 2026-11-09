@@ -6,6 +6,7 @@ description: "Design a static HTML/CSS UI mock in a .mock.html file, preview it 
 # UI mock (canvas)
 
 Write one screen per `name.mock.html` file. The compound suffix selects the 界面稿 preview; ordinary `.html` files stay with DSH's normal viewer. This is a design document, not a running app: use semantic HTML and inline CSS, never JavaScript, event handlers, frameworks, external stylesheets, fonts or remote images. Inline CSS and `data:` images work; network resources and scripts are blocked.
+The sanitizer re-parses its serialized output and only renders a stable, passive result. HTML that still mutates after four sanitization rounds is a located error; removed active markup produces warnings even when HTML5 parser repair first hid it as text.
 
 ## Compose the screen
 

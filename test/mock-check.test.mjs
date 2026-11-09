@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 import { createServer } from 'node:http'
+import { createServer as createTcpServer, connect } from 'node:net'
 import { homedir } from 'node:os'
 import { posix } from 'node:path'
 import test from 'node:test'
@@ -291,4 +292,64 @@ test('real mock raster keeps authored geometry, paints comment outlines, and blo
       await context.close()
     }
   })
+})
+
+test('mXSS form mutation opens no TCP connections in preview or capture and check still attaches PNG', { skip }, async t => {
+  let connections = 0
+  const listener = createTcpServer(socket => { connections++; socket.destroy() })
+  await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve))
+  t.after(() => new Promise(resolve => listener.close(resolve)))
+  const port = listener.address().port
+  await new Promise(resolve => { const socket = connect(port, '127.0.0.1'); socket.on('close', resolve); socket.on('error', () => {}) })
+  assert.equal(connections, 1, 'TCP observer detects a real connection even without an HTTP request')
+  const origin = `http://127.0.0.1:${port}`
+  const source = `<!doctype html><html><head></head><body><h1 id="t">Hi</h1><form><math><mtext></form><form><mglyph><style></math><iframe src="${origin}/f"></iframe><meta http-equiv="refresh" content="0;url=${origin}/refresh"><img src=x onerror=alert(1)></style></mglyph></form></mtext></math></form></body></html>`
+  const parsed = parseMock(source)
+  assert.equal(parsed.ok, true)
+  const headless = new HeadlessBrowser()
+  t.after(() => headless.dispose())
+  const observed = { warnings: parsed.diagnostics.filter(item => item.severity === 'warning').length }
+  await headless.use(location.path, async browser => {
+    const context = await browser.newContext()
+    try {
+      // A separate parent origin, as in the real srcdoc preview.
+      await context.route('http://canvas-preview.test/', route => route.fulfill({ body: '<!doctype html><html><body></body></html>', contentType: 'text/html' }))
+      const tab = await context.newPage()
+      await tab.goto('http://canvas-preview.test/')
+      connections = 0
+      await tab.evaluate(content => {
+        const frame = document.createElement('iframe')
+        frame.setAttribute('sandbox', 'allow-same-origin')
+        frame.srcdoc = content
+        document.body.append(frame)
+      }, mockPage(parsed.document).html)
+      await tab.waitForTimeout(750)
+      observed.previewConnections = connections
+      await tab.close()
+      connections = 0
+      try {
+        const result = await raster.renderMock(browser, mockPage(parsed.document), signal, true)
+        observed.screenshot = result.shot?.png.length > 0
+        observed.nodes = result.inspection.nodes.map(node => node.id)
+      } catch (error) {
+        observed.renderError = error.message
+      }
+      await new Promise(resolve => setTimeout(resolve, 750))
+      observed.captureConnections = connections
+    } finally {
+      await context.close()
+    }
+  })
+  const { run } = harness({ source, browser: location, headless })
+  const checked = await run()
+  observed.check = checked.text
+  observed.attached = checked.image !== undefined
+  t.diagnostic(JSON.stringify(observed))
+  assert.equal(observed.previewConnections, 0)
+  assert.equal(observed.captureConnections, 0)
+  assert.ok(observed.warnings > 0)
+  assert.equal(observed.screenshot, true)
+  assert.equal(observed.attached, true)
+  assert.match(checked.text, /警告/u)
+  assert.doesNotMatch(checked.text, /未出图/u)
 })

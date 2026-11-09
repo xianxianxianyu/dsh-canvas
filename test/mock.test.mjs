@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { parse, serializeOuter } from 'parse5'
 import { parseMock, MOCK_VIEWPORTS } from '../src/shared/mock.ts'
 import { mockPage } from '../src/shared/page.ts'
 import { threadsOf } from '../src/shared/comments.ts'
@@ -113,3 +114,32 @@ test('deep mock nesting reports a located error instead of overflowing the stack
   assert.ok(error.snippet.includes('^'))
   assert.equal(parsed(html('<div>'.repeat(100) + 'ordinary' + '</div>'.repeat(100))).ok, true)
 })
+
+const mxss = [
+  ['noscript', '<noscript><p title="</noscript><img src=x onerror=alert(1)>">'],
+  ['svg/style', '<svg><style><img src=x onerror=alert(1)></style></svg>'],
+  ['math/mglyph', '<math><mtext><table><mglyph><style><!--</style><img title="--><img src=x onerror=alert(1)>">'],
+  ['form nesting', '<form><math><mtext></form><form><mglyph><style></math><iframe src="https://adv-opus-check-iframe.example.com/f"></iframe><meta http-equiv="refresh" content="0;url=https://example.com/"><img src=x onerror=alert(1)></style></mglyph></form></mtext></math></form>'],
+]
+
+for (const [name, body] of mxss) {
+  test(`mXSS ${name} remains passive and stable after re-parsing`, () => {
+    const result = parseMock(html(body))
+    if (!result.ok) {
+      assert.ok(result.diagnostics.some(item => item.severity === 'error' && item.line > 0))
+      return
+    }
+    const tree = parse(result.document.html, { scriptingEnabled: false })
+    const queue = [...tree.childNodes]
+    for (const node of queue) {
+      if (node.childNodes) queue.push(...node.childNodes)
+      if (node.content) queue.push(node.content)
+      if (!node.tagName) continue
+      assert.ok(!['script', 'iframe', 'meta'].includes(node.tagName) || (node.tagName === 'meta' && !node.attrs.some(attr => attr.name === 'http-equiv')), `${name}: live ${node.tagName}`)
+      assert.ok(!node.attrs.some(attr => attr.name.startsWith('on') || attr.name === 'srcdoc' || attr.name === 'src' && !attr.value.startsWith('data:')), `${name}: active attribute`)
+    }
+    const root = tree.childNodes.find(node => node.tagName === 'html')
+    assert.equal(serializeOuter(root), result.document.html)
+    if (name === 'form nesting') assert.ok(result.diagnostics.some(item => item.severity === 'warning'))
+  })
+}
