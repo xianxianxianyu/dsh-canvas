@@ -1,22 +1,36 @@
 #!/usr/bin/env node
 // Is this machine worth driving dsh-canvas on? One line per check, then a verdict.
 //
-//   doctor.mjs [--no-live]
+//   doctor.mjs [--no-live] [--patch <path>]...
 //
 // Read-only, except the live auth probe: one tiny headless turn ("reply OK") whose session and
 // stores land in $CANVAS_VERIFY_OUT/doctor-<time>/ like any other run. --no-live skips it.
+// Extra patches are temporary overlays for both profile dumps and the live probe, in argument order.
+// fs-observation-policy off is informational (WARN), not a readiness failure; defaults are unchanged.
 // Exit status: 0 when nothing failed, 1 otherwise.
 
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+import { parse } from 'yaml'
 import { DEV_DATA } from './dev-ui.mjs'
 import { DSH_BIN, OUT, PROFILE, REPO, dshEnv, linkState } from './run-headless.mjs'
 
 const DEV_PROFILE = 'canvas-dev'
 const DEV_PORT = 3996
 const live = !process.argv.includes('--no-live')
+const extraPatches = []
+for (let i = 2; i < process.argv.length; i++) {
+  if (process.argv[i] !== '--patch') continue
+  const path = process.argv[++i]
+  if (!path || path.startsWith('--')) {
+    console.error('doctor: --patch needs a path')
+    process.exit(2)
+  }
+  extraPatches.push(resolve(path))
+}
+const patchArgs = extraPatches.flatMap(path => ['--patch', path])
 let failed = false
 
 function report(level, check, detail) {
@@ -65,6 +79,30 @@ for (const [name, creator] of [[DEV_PROFILE, 'scripts/dev-server.sh'], [PROFILE,
   if (state.ok) report('OK', 'link', state.detail)
   else if (state.missing) report('WARN', 'link', `${state.detail}; ${creator} creates it on first use`)
   else report('FAIL', 'link', state.detail)
+  if (state.missing || !existsSync(cli)) {
+    report('WARN', 'policy', `${name}: fs-observation-policy unknown (${state.missing ? 'profile does not exist' : 'CLI missing'})`)
+    continue
+  }
+  const config = spawnSync('dsh', ['--profile', name, '--dump-config', ...patchArgs], { env: dshEnv(), encoding: 'utf8' })
+  if (config.status !== 0) {
+    report('FAIL', 'policy', `${name}: cannot dump composed config: ${config.error?.message ?? (config.stderr?.trim() || `exit ${config.status}`)}`)
+    continue
+  }
+  try {
+    // Cordis !!js scalars remain source strings; the doctor never evaluates configuration code.
+    const entries = parse(config.stdout, { customTags: [{ tag: 'tag:yaml.org,2002:js', resolve: value => value }] })
+    if (!Array.isArray(entries)) throw new Error('--dump-config did not return a plugin entry list')
+    const policy = entries.find(entry => entry?.id === 'fs-observation-policy')
+    if (!policy || policy.disabled === true) {
+      report('WARN', 'policy', `${name}: fs-observation-policy off (${policy ? 'disabled' : 'not present'} in composed config; allowed, defaults unchanged)`)
+    } else if (policy.disabled === undefined || policy.disabled === false) {
+      report('OK', 'policy', `${name}: fs-observation-policy on in composed config`)
+    } else {
+      report('WARN', 'policy', `${name}: fs-observation-policy unknown (disabled is not a literal boolean)`)
+    }
+  } catch (error) {
+    report('FAIL', 'policy', `${name}: cannot read composed config: ${error.message}`)
+  }
 }
 
 // 4. Port 3996 must be free, or held by a canvas-dev server; anything else is not ours to drive.
@@ -100,7 +138,7 @@ else if (!live) report('WARN', 'auth', 'credentials stored; live probe skipped (
 else if (!linkState(PROFILE).ok && !linkState(PROFILE).missing) report('FAIL', 'auth', `live probe skipped: ${linkState(PROFILE).detail}`)
 else {
   const name = `doctor-${new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '').replace('T', '-')}`
-  spawnSync(process.execPath, [join(import.meta.dirname, 'run-headless.mjs'), '--name', name, '--timeout', '180', '只回复 OK 两个字母，不要调用任何工具。'], { encoding: 'utf8' })
+  spawnSync(process.execPath, [join(import.meta.dirname, 'run-headless.mjs'), '--name', name, '--timeout', '180', ...patchArgs, '只回复 OK 两个字母，不要调用任何工具。'], { encoding: 'utf8' })
   const summaryFile = join(OUT, name, 'summary.json')
   const summary = existsSync(summaryFile) ? JSON.parse(readFileSync(summaryFile, 'utf8')) : undefined
   if (summary?.final?.kind === 'completed') report('OK', 'auth', `headless turn completed on ${summary.model} (${summary.seconds}s, ${join(OUT, name)})`)

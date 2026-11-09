@@ -20,6 +20,8 @@ The feature map in [`features/`](features/README.md) has one recipe per feature.
 - The dev UI cannot run side by side. There is one `canvas-dev` profile and one port per machine, shared by every checkout. Drive only a server you started yourself; when `doctor.mjs` shows 3996 taken by a server you did not start, wait or ask, never take it over.
 - Headless runs keep their sessions, storage, attachments and canvas root inside their own run directory, and the Chrome that `canvas_check` starts gets a fresh temporary profile from playwright. The only state they share is the `canvas-e2e` profile, whose composed `cordis.yml` dsh rewrites at every boot. Running them in parallel has not been tried; run them one after another.
 - The dev UI keeps its session store, storages (workspace list, archived and pinned sessions), attachments and canvas root in its own data directory, `DEV_DATA` = `$CANVAS_DEV_DATA` or `~/.cache/dsh-canvas-dev`, never in `~/.dsh`. Each DSH process loads `storages/workspace.json` once, at boot, and rewrites the whole file on every change, with no cross-process lock, so sharing `~/.dsh/storages` with the desktop app would let one side's write erase the other's archives. Its sessions therefore never appear in the user's app; the account credentials in `~/.dsh` are still read, so sign-in works. Rows in the dev UI's tree that your run did not create belong to an earlier run or another agent's run on this profile: never click them.
+- Leave `fs-observation-policy` at its installed default (off on DSH 0.2.2-rc.1); the plugin does not enable it globally. Independent `edit` hunks apply atomically to current content, but stale whole-file writes can erase user changes. Test stale-version rejection only with a temporary policy-on `--patch`, never by editing the plugin patch or a profile.
+- Board-loss warnings and recovery data come from a bounded in-memory journal in the host that accepted the route operation. Drive the agent and board route in that same canvas-dev process; a separate headless process cannot share the journal, even when it shares the board path or canvas root. See [`features/board.md`](features/board.md).
 
 Paths used below:
 
@@ -77,12 +79,14 @@ There is no server. Each `scripts/run-headless.mjs` call is one `dsh --profile c
 - **Stores.** The `session-persistence-jsonl` root, the `storage-json` root, `attachment-local.dshHome` and the `canvas` root all move into `$OUT/<run>/state/`. A run therefore writes nothing under `~/.dsh` except the profile's composed `cordis.yml`, which dsh rewrites on every boot.
 - **`--no-browser`.** The `canvas` row also gets `browserPath` pointing at a file that does not exist.
 
+Optional `--patch <path>` arguments are repeatable. The runner resolves them from the invocation directory, passes them to DSH in order **after** its generated `run.patch.yml`, and records the ordered paths in `summary.json` as `extraPatches`. Use overlays scoped to the condition under test; do not override the isolated stores. For the board stale-guard journey, a temporary overlay enables only `fs-observation-policy`; the normal runner and profile defaults stay unchanged.
+
 ## Doctor
 
 Run this first, and again whenever anything looks off:
 
 ```sh
-node $SKILL/scripts/doctor.mjs            # add --no-live to skip the model call
+node $SKILL/scripts/doctor.mjs [--no-live] [--patch <path>]  # --patch is repeatable
 ```
 
 | Check | OK means | Fix on FAIL |
@@ -90,22 +94,23 @@ node $SKILL/scripts/doctor.mjs            # add --no-live to skip the model call
 | `dsh` | the CLI exists in the app bundle and reports its version | install DeepSeek Harness.app |
 | `build` | `lib/` is newer than every file in `src/` | `pnpm build` |
 | `link` | `canvas-dev` and `canvas-e2e` both resolve `dsh-canvas` to this checkout (WARN: the profile is missing and will be created) | `dsh plugin --profile <p> add link:$REPO`, on purpose |
+| `fs-observation-policy` | effective policy state is reported for each profile, after supplied overlays; enabled is OK and disabled is WARN, not failure | keep the default off; use a throwaway `--patch` only for the policy-on guard journey |
 | `port` | 3996 is free, or a `--profile canvas-dev` server holds it | anything else on 3996 is not ours: stop |
 | `data` | `DEV_DATA` is where canvas-dev keeps its stores; a running canvas-dev listener carries `--patch DEV_DATA/dev.patch.yml` | the listener was started without the patch (an older `dev-server.sh`, or another `CANVAS_DEV_DATA`) and shares `~/.dsh` with the desktop app: its owner stops it and restarts it with `scripts/dev-server.sh` |
 | `browser` | the Chrome or Edge that `canvas_check` will use, found by the plugin's own `src/host/browser.ts` | install Chrome; without it only `check-no-browser` and `check-text-only` can run |
 | `auth` | a one-line headless turn (`只回复 OK…`) completed through the account | `ACCOUNT_SIGN_IN_REQUIRED`: sign in once in the desktop app |
 
-The doctor ends with `doctor: ready` and exit 0, or `doctor: not ready` and exit 1. Its live probe is an ordinary run whose evidence lands in `$OUT/doctor-<time>/`.
+The doctor ends with `doctor: ready` and exit 0, or `doctor: not ready` and exit 1. A disabled filesystem observation policy alone does not make it unready. Repeatable `--patch <path>` arguments apply in order to each profile's configuration inspection and are forwarded to the optional live auth probe. This reports the supplied configuration, not a live mutation of an already running server. The live probe is an ordinary run whose evidence lands in `$OUT/doctor-<time>/`.
 
 ## Drive
 
 ### `canvas_check` and `canvas_comment` through headless DSH
 
 ```sh
-node $SKILL/scripts/run-headless.mjs --name <run> [--model deepseek-v4-pro] [--no-browser] [--cwd <dir>] [--canvas-root <dir>] "<prompt>"
+node $SKILL/scripts/run-headless.mjs --name <run> [--model deepseek-v4-pro] [--no-browser] [--cwd <dir>] [--canvas-root <dir>] [--patch <path>] "<prompt>"
 ```
 
-The runner prints the run directory, the session id, the final reason, every `present` result, each `canvas_check` call and each `canvas_comment` call. For each check it shows the input, the status (`error` or `completed`), the verbatim result text, and the PNG it attached, copied out of the run's attachment store. It exits 0 only when the turn completed. `--cwd` lets a later turn work in an earlier run's `work/`, and `--canvas-root` points the plugin at a comment store the dev server shares; both must be directories inside `$OUT`. The prompts and expected texts are in [`features/canvas-check.md`](features/canvas-check.md) and [`features/comments.md`](features/comments.md).
+The runner prints the run directory, the session id, the final reason, every `present` result, each `canvas_check` call and each `canvas_comment` call. For each check it shows the input, the status (`error` or `completed`), the verbatim result text, and the PNG it attached, copied out of the run's attachment store. It exits 0 only when the turn completed. `--cwd` lets a later turn work in an earlier run's `work/`, and `--canvas-root` points the plugin at a comment store the dev server shares; both must be directories inside `$OUT`. Sharing that root does not share a board journal. `--patch` supplies optional ordered overlays as described under Launch. The recipes are in [`features/canvas-check.md`](features/canvas-check.md), [`features/comments.md`](features/comments.md) and [`features/board.md`](features/board.md); board-loss checks require the same-host dev agent, not this separate process.
 
 ### The comment route without a page
 
@@ -119,14 +124,17 @@ It trades the server's whole `dsh web:` URL for the signed cookie, as a browser 
 ### The board route without a page
 
 ```sh
-node $SKILL/scripts/board-route.mjs [--anonymous] "<dsh web url>" '<json body>'
-node $SKILL/scripts/board-route.mjs "<dsh web url>" -   # read {"path":"<abs>","ops":[…]} from stdin
+node $SKILL/scripts/board-route.mjs [--anonymous] "<dsh web url>" get <absolute .canvas path>
+node $SKILL/scripts/board-route.mjs [--anonymous] "<dsh web url>" post '<json body>'
+node $SKILL/scripts/board-route.mjs "<dsh web url>" post -   # read {"path":"<abs>","ops":[…]} from stdin
 ```
 
-Like the comment helper, it exchanges the whole server URL for the owner cookie. It POSTs to
-`/api/canvas/board` and prints `HTTP <status>` plus the response verbatim, including each operation's
-`applied`, `unchanged`, `missing` or `conflict` status. A 2xx response exits 0, any other response exits 1,
-and missing arguments exit 2. It creates no session.
+Like the comment helper, it exchanges the whole server URL for the owner cookie. It calls
+`GET|POST /api/canvas/board` and prints `HTTP <status>` plus the response verbatim. POST includes
+each operation's `applied`, `unchanged`, `missing` or `conflict` status. A 2xx response exits 0,
+any other response exits 1, and missing arguments exit 2. It creates no session.
+
+The owner-only GET returns `{ lost: [{ id, at, ops, count }] }` for retained user-operation intent that would apply again to the current board; the helper supplies the encoded absolute `path` query. Use `--anonymous` to prove GET and POST both reject unauthenticated calls. The host retains only the last 20 active applied-operation batches per canonical board, supersedes older intent with newer successful user operations, and excludes dry-run `unchanged`, `missing` and `conflict` outcomes from loss reports. This is bounded, restart-sensitive detection, not overwrite prevention or durable undo. `canvas_check` in that host warns about losses; a user-facing restore action remains unit 4c.
 
 ### Diagram preview through the omp browser
 
@@ -184,7 +192,7 @@ Each headless run keeps these files:
 Each UI journey keeps these files:
 
 - `sessions.json`: every session id the run created, recorded by `ui.open` (the blank session a page load created, which becomes the conversation once you send into it; a load that reopens an existing conversation records nothing).
-- `NN-<step>.png`: written by `ui.shot`, which saves a full-page PNG at 2000×1250. Capture the state after each action, not only the last screen.
+- `NN-<step>.png`: written by `ui.shot` at the tab's current viewport and device scale. Capture the state after each action, not only the last screen. For responsive-layout comparisons, keep viewport and scale fixed and save measured tab, drawing and drawer dimensions with each screenshot.
 - `work/`: the file the agent wrote.
 - `journey.log`: you write one line per step, as `<step> | <action> | <observed value, verbatim> | <artifact>`. Include the id `ui.archive` returns.
 
@@ -193,7 +201,7 @@ Proof standards:
 - **Real user path.** Open the file from the present card, not through an internal API. Get `canvas_check` results from a real agent turn.
 - **Action and result.** Record what you did and the state it produced: the menu items and which one is selected, the `srcdoc` labels, the error text.
 - **Side effects.** Check the file on disk, the PNG the model received (look at it), and the archived id in the store. A screen alone is not proof.
-- **No fakes.** The only staged condition is `--no-browser`. It is a real configuration (`browserPath` set to a missing file), not a mock.
+- **No fakes.** Stage only the recipe's explicit conditions: for example `--no-browser` points `browserPath` at a missing file, the policy-on journey uses a throwaway configuration overlay, and the stale-write negative control deliberately overwrites a test board. Exercise the real host, tools and route; never substitute mocks or count expected results as observations.
 - **Unreachable paths.** When a journey cannot run, record the command you tried and the unmet precondition. Never report it as verified through another path.
 
 ## Cleanup
@@ -203,10 +211,10 @@ Do these in order after every journey, including failed attempts:
 1. **Archive what the run created.** In the UI, `await ui.archive(tab, run)` archives the session on screen and returns its id once canvas-dev's store (`DEV_DATA/storages/workspace.json`) lists it as archived. A conversation goes through its row menu (归档会话); a blank `新会话` goes through Meta+Alt+A. It refuses any session missing from `<run>/sessions.json`, so it cannot archive a session another run created. Log the id in `journey.log`.
 2. **Close your browser:** `await browser.close({ name: 'canvas-dev', kill: true })`.
 3. **Stop the dev server you started:** `write proc://canvas-dev-3996/kill` (outside omp, `kill <the pid you kept>`).
-4. **Clean up:** `node $SKILL/scripts/leftovers.mjs --clean $OUT/<run> …` stops processes whose command line names a run directory or its Chrome profile (they are ours by construction), removes that profile, and reports every session in `sessions.json` that is not archived. Pass run directories only (`ls -d $OUT/*/` lists exactly those).
+4. **Clean up:** `node $SKILL/scripts/leftovers.mjs --clean $OUT/<run> …` stops processes whose command line names a run directory or its Chrome profile (they are ours by construction), removes that profile, and reports every UI session in `sessions.json` that is not archived. Once a headless run has exited, it also archives `summary.json`'s session id in that run's own `state/storages/workspace.json`, by atomic replacement; repeating cleanup is harmless. Pass run directories only.
 5. **Prove it:** `node $SKILL/scripts/leftovers.mjs $OUT/<run> …` must exit 0. It shows 3996 free, nothing running, every new session archived, and the evidence files listed. Then the cleanup is done and the proof survived it.
 
-Headless runs need no teardown: dsh exits, and the Chrome that `canvas_check` launched closes with it. Never delete `$OUT`, never remove the `canvas-dev` or `canvas-e2e` profiles or `DEV_DATA` (later runs reuse them, and journey logs point at the sessions in `DEV_DATA/sessions`), and never kill `DeepSeek Harness` or `Google Chrome` by name: those are the user's apps.
+Headless processes need no manual teardown: dsh exits, and the Chrome that `canvas_check` launched closes with it. Still pass every headless run directory through `leftovers.mjs --clean` to archive its session in its isolated store, then run the read-only report. Never delete `$OUT`, never remove the `canvas-dev` or `canvas-e2e` profiles or `DEV_DATA` (later runs reuse them, and journey logs point at the sessions in `DEV_DATA/sessions`), and never kill `DeepSeek Harness` or `Google Chrome` by name: those are the user's apps.
 
 ## Helpers
 
@@ -214,9 +222,9 @@ All helpers live in `$SKILL/scripts/` and need Node 22.18 or later: `doctor.mjs`
 
 | Helper | Invocation | Does | Exit |
 |---|---|---|---|
-| `doctor.mjs` | `node $SKILL/scripts/doctor.mjs [--no-live]` | the readiness checks above | 0 ready, 1 not |
-| `run-headless.mjs` | `node $SKILL/scripts/run-headless.mjs [--model m] [--no-browser] [--name run] [--timeout s] [--cwd dir] [--canvas-root dir] <prompt \| ->` | one headless turn in `$OUT/<run>`; prints the session id and every `canvas_check` and `canvas_comment` result | 0 completed, 1 not, 2 usage or setup |
+| `doctor.mjs` | `node $SKILL/scripts/doctor.mjs [--no-live] [--patch path]…` | readiness and effective-policy checks, with optional ordered overlays | 0 ready, 1 not |
+| `run-headless.mjs` | `node $SKILL/scripts/run-headless.mjs [--model m] [--no-browser] [--name run] [--timeout s] [--cwd dir] [--canvas-root dir] [--patch path]… <prompt \| ->` | one headless turn in `$OUT/<run>`; prints the session id and every `canvas_check` and `canvas_comment` result; records optional overlays | 0 completed, 1 not, 2 usage or setup |
 | `comments-route.mjs` | `node $SKILL/scripts/comments-route.mjs [--anonymous] <dsh web url> get <path> \| post <json \| ->` | one call to the comment route of a running canvas-dev | 0 for 2xx, 1 otherwise, 2 usage |
-| `board-route.mjs` | `node $SKILL/scripts/board-route.mjs [--anonymous] <dsh web url> <json \| ->` | one POST to the board route; prints the raw response and every per-op status | 0 for 2xx, 1 otherwise, 2 usage |
+| `board-route.mjs` | `node $SKILL/scripts/board-route.mjs [--anonymous] <dsh web url> get <path> \| post <json \| ->` | one call to the board route; prints lost batches on GET or per-op statuses on POST | 0 for 2xx, 1 otherwise, 2 usage |
 | `dev-ui.mjs` | `const ui = await import('$SKILL/scripts/dev-ui.mjs')` in an omp JS eval | `open`, `send`, `previewFile`, `sidebar`, `waitForSidebar`, `rendererMenu`, `chooseRenderer`, `shot`, `currentSession`, `archive`, `runSessions`, `archivedIds`, `chromeProfile`; for comments `comments`, `waitForComments`, `commentMode`, `escape`, `addComment`, `openComments`, `toggleFilter`, `threadAction` and the selector builders `node`, `pin`, `thread`, `filter`; `DEV_DATA`, and `SEL` (the handles) | throws with the step that timed out |
 | `leftovers.mjs` | `node $SKILL/scripts/leftovers.mjs [--clean] <run-dir>…` | the cleanup report, and with `--clean` the cleanup itself | 0 clean, 1 something left |

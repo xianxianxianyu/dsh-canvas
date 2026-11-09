@@ -3,7 +3,7 @@
 // one evidence directory, and print the session id plus each canvas_check result verbatim.
 //
 //   run-headless.mjs [--model deepseek-flash|deepseek-v4-pro] [--no-browser] [--name <run>]
-//                    [--timeout <seconds>] [--cwd <dir>] [--canvas-root <dir>] <prompt | ->
+//                    [--timeout <seconds>] [--cwd <dir>] [--canvas-root <dir>] [--patch <path>]... <prompt | ->
 //
 // The run directory is $CANVAS_VERIFY_OUT/<run> (default root /tmp/dsh-canvas-verify):
 //   prompt.txt, events.ndjson (dsh --json), stderr.log, final.txt, canvas-check.txt,
@@ -12,6 +12,8 @@
 // --cwd and --canvas-root continue a multi-turn journey such as comments: the session works in an
 // earlier run's work/, and canvas reads and writes a comment store that a dev server shares. Both
 // must be existing directories inside the evidence root, so a run never writes outside it.
+// Repeatable --patch overlays apply after run.patch.yml, in argument order, without changing profile
+// defaults. summary.json records their absolute paths as extraPatches.
 // An existing run directory is never reused, so earlier evidence is never overwritten.
 // Exit status: 0 when the turn completed, 1 when it did not, 2 for usage or setup errors.
 
@@ -26,7 +28,7 @@ export const PROFILE = 'canvas-e2e'
 export const DSH_BIN = '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin'
 export const REPO = realpathSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../../..'))
 export const OUT = process.env.CANVAS_VERIFY_OUT || '/tmp/dsh-canvas-verify'
-const USAGE = 'usage: run-headless.mjs [--model deepseek-flash|deepseek-v4-pro] [--no-browser] [--name <run>] [--timeout <seconds>] [--cwd <dir>] [--canvas-root <dir>] <prompt | ->'
+const USAGE = 'usage: run-headless.mjs [--model deepseek-flash|deepseek-v4-pro] [--no-browser] [--name <run>] [--timeout <seconds>] [--cwd <dir>] [--canvas-root <dir>] [--patch <path>]... <prompt | ->'
 
 /** The environment every dsh call gets: the CLI's bin only (never runtime/bin), no inherited DSH_HOME. */
 export function dshEnv() {
@@ -79,7 +81,7 @@ function ensureProfile() {
 }
 
 /**
- * The run's only patch: account auth on (the headless template disables it), the model, the
+ * The run's generated patch: account auth on (the headless template disables it), the model, the
  * present tool (absent from the headless template), and every store moved into the run directory.
  */
 function runPatch({ model, state, canvasRoot, noBrowser }) {
@@ -119,7 +121,7 @@ function runPatch({ model, state, canvasRoot, noBrowser }) {
 }
 
 function parseArgs(argv) {
-  const options = { model: 'deepseek-flash', noBrowser: false, name: undefined, timeout: 600, cwd: undefined, canvasRoot: undefined }
+  const options = { model: 'deepseek-flash', noBrowser: false, name: undefined, timeout: 600, cwd: undefined, canvasRoot: undefined, extraPatches: [] }
   const rest = []
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
@@ -129,6 +131,11 @@ function parseArgs(argv) {
     else if (arg === '--timeout') options.timeout = Number(argv[++i])
     else if (arg === '--cwd') options.cwd = argv[++i]
     else if (arg === '--canvas-root') options.canvasRoot = argv[++i]
+    else if (arg === '--patch') {
+      const path = argv[++i]
+      if (!path || path.startsWith('--')) fail('--patch needs a path')
+      options.extraPatches.push(resolve(path))
+    }
     else if (arg === '-h' || arg === '--help') { console.log(USAGE); process.exit(0) }
     else rest.push(arg)
   }
@@ -184,7 +191,7 @@ function main() {
   const stdout = openSync(join(run, 'events.ndjson'), 'w')
   const stderr = openSync(join(run, 'stderr.log'), 'w')
   const started = Date.now()
-  const child = dsh(['--profile', PROFILE, '--patch', patch, '--json', options.prompt], {
+  const child = dsh(['--profile', PROFILE, '--patch', patch, ...options.extraPatches.flatMap(path => ['--patch', path]), '--json', options.prompt], {
     cwd: work, stdio: ['ignore', stdout, stderr], timeout: options.timeout * 1000,
   })
   closeSync(stdout)
@@ -218,6 +225,7 @@ function main() {
   const stderrText = readFileSync(join(run, 'stderr.log'), 'utf8')
   const summary = {
     run, sessionId, model: options.model, browser: options.noBrowser ? 'missing on purpose' : 'discovered', cwd: work, canvasRoot,
+    extraPatches: options.extraPatches,
     exit: child.status, signal: child.signal, seconds: Math.round((Date.now() - started) / 1000),
     final: final?.reason ?? null, signInRequired: stderrText.includes('ACCOUNT_SIGN_IN_REQUIRED'), checks, comments, presented,
   }

@@ -1,6 +1,6 @@
 # Comments
 
-In the sidebar preview of a `.mmd` file the user turns on comment mode, clicks a node, types and presses Enter. The comment is pinned on the node with a count and a red dashed frame, and listed in a side list with status filters. When the user says 看批注 in chat, the agent's `canvas_check` lists every pending comment and frames its node in the picture; the agent fixes the chart and calls `canvas_comment` to reply and mark the comment 已处理 (addressed). Within a few seconds the sidebar shows the new status with the reply under the comment. Only the user resolves, reopens or deletes. The comments live in a store under the plugin's `root`, which the sidebar reaches through the owner-only route `GET|POST /api/canvas/comments`.
+In the sidebar preview of a `.mmd` file the user turns on comment mode, clicks a node, types and presses Enter. The comment is pinned on the node with a count and a red dashed frame, and listed with status filters. In a tab narrower than 640 px, that list is a bottom drawer and the drawing keeps the full width, fitting above it; wider tabs use a side column. When the user says 看批注 in chat, the agent's `canvas_check` lists every pending comment and frames its node in the picture; the agent fixes the chart and calls `canvas_comment` to reply and mark the comment 已处理 (addressed). Within a few seconds the sidebar shows the new status with the reply under the comment. Only the user resolves, reopens or deletes. The comments live in a store under the plugin's `root`, which the sidebar reaches through the owner-only route `GET|POST /api/canvas/comments`.
 
 ## Sub-features
 
@@ -10,7 +10,8 @@ In the sidebar preview of a `.mmd` file the user turns on comment mode, clicks a
 - `comment-permission`: `canvas_comment` with `status: "resolved"` (or `"open"`) is an error, `只有用户能把批注标记为已解决（resolved）或重新打开；agent 只能回复，或用 status: "addressed" 标记已处理。`, and the store's version does not change.
 - `comment-mode`: the 批注 button (top left of the preview) or the C key toggles comment mode: the button turns red, the cursor is a crosshair, and the hint `批注模式（C）：点一个节点写批注，Esc 退出` shows under the button. Esc leaves.
 - `comment-create`: in comment mode a click on a node opens a form titled `批注 · <label>`; Enter sends. The node gets a pin (`<n> 条批注：<label>`) and a red dashed frame, ☰ counts one more, and the focus returns to the diagram, so Esc and C keep working.
-- `comment-list`: ☰ or a pin opens the side list: filters `未处理 <n>`, `已处理 <n>`, `已解决 <n>` (the first two on), then one card per thread with the node label, `● <status>`, the text, `你 · <time>`, the replies indented under it, and 解决 / 重开 / 删除 as the status allows.
+- `comment-list`: ☰ or a pin opens the list: filters `未处理 <n>`, `已处理 <n>`, `已解决 <n>` (the first two on), then one card per thread with the node label, `● <status>`, the text, `你 · <time>`, the replies indented under it, and 解决 / 重开 / 删除 as the status allows.
+- `comment-drawer`: when the preview tab is narrower than 640 px, the list becomes a full-width bottom drawer of height `round(min(tab height × 0.45, 380 px))`. The drawing pane retains full width; automatic fit puts the whole drawing above the drawer, with zoom controls above it too. At 640 px or wider the list is a side column.
 - `comment-addressed`: after 看批注 the thread turns `● 已处理` and the agent's reply appears under it with no reload, within one 3 s poll. The list, comment mode, an unsent draft and the zoom survive the agent's edits to the file.
 - `comment-drift`: a thread whose node changed carries a warning: `⚠ <id> 的文字已从「<old>」变成「<new>」`, or `⚠ 图里已没有 <id>（批注时是「<label>」）；「<label>」现在是 <new id>`.
 - `comment-resolve`: 解决 marks a thread resolved, and the default filters hide it; with 已解决 on it shows with 重开, which makes it 未处理 again.
@@ -48,6 +49,40 @@ Dev UI steps (the person's side). Run each step in its own eval and write one `j
 - **comment-mode.** `await ui.commentMode(tab, true)` returns `commenting: true` and the hint `批注模式（C）：点一个节点写批注，Esc 退出`. `await ui.commentMode(tab, false, { via: 'key' })`, then `await ui.commentMode(tab, true, { via: 'key' })`, toggle it through the C key. Proof: `01-mode.png`.
 - **comment-create.** `const { draft, after } = await ui.addComment(tab, 's3', '支付失败后应该能直接重试，再给一个「取消订单」的出口')`. `draft.title` is `批注 · 支付失败`, and `after.pins` holds `{ node: 's3', label: '1 条批注：支付失败', count: 1 }` with `after.pending` 1. `(await ui.sidebar(tab)).srcdoc` contains `outline:2.5px dashed`. Then `(await ui.escape(tab)).commenting` is `false`. Proof: `02-pinned.png`.
 - **comment-list.** `await ui.openComments(tab)`. Its `list.filters` read `未处理 1` (on), `已处理 0` (on), `已解决 0` (off). The one thread has `badge: '● 未处理'`, `by: '你 · <hh:mm>'` and `buttons: ['解决', '删除']`. Proof: `03-list.png`.
+- **comment-drawer.** Keep this same small chart and thread. Set a fixed viewport, for example `await tab.emulate({ viewport: { width: 1200, height: 900 } })`, and resize the sidebar if necessary until its measured preview-tab width is **below 640 px**. Browser width alone is not the breakpoint. Close the list by clicking its toggle through the page, then press 适应窗口 to clear any manual zoom. Save `03a-narrow-closed.png` and the measurements below. Reopen with `await ui.openComments(tab)`, press 适应窗口 again, and save `03b-narrow-drawer.png` with another measurement at the **same** viewport and device scale:
+
+  ```js
+  const measureComments = () => tab.evaluate(() => {
+    const pane = document.querySelector('[data-canvas-diagram]');
+    const container = pane.parentElement;
+    const list = container.querySelector('[data-canvas-comments]');
+    const rect = element => element ? element.getBoundingClientRect().toJSON() : null;
+    return {
+      viewport: { width: innerWidth, height: innerHeight, scale: devicePixelRatio },
+      tab: { width: container.clientWidth, height: container.clientHeight, rect: rect(container) },
+      pane: rect(pane),
+      drawing: rect(pane.querySelector('iframe')),
+      list: rect(list),
+      drawer: list?.hasAttribute('data-canvas-drawer') ?? false,
+      zoom: pane.querySelector('button[aria-label="原始大小"]').textContent,
+    };
+  });
+  // Close only when open; call before the closed screenshot.
+  await tab.evaluate(() => {
+    if (document.querySelector('[data-canvas-comments]'))
+      document.querySelector('[data-canvas-diagram] button[aria-label="批注列表"]').click();
+    document.querySelector('[data-canvas-diagram] button[aria-label="适应窗口"]').click();
+  });
+  const closed = await measureComments();
+  await ui.shot(tab, `${run}/03a-narrow-closed.png`);
+  await ui.openComments(tab);
+  await tab.evaluate(() =>
+    document.querySelector('[data-canvas-diagram] button[aria-label="适应窗口"]').click());
+  const opened = await measureComments();
+  await ui.shot(tab, `${run}/03b-narrow-drawer.png`);
+  ```
+
+  Save `closed` and `opened` beside the PNGs. Compare actual dimensions with at most 2 CSS px tolerance for borders/rounding: `opened.drawer` is true; the list spans the tab width, its bottom meets the tab bottom, and its height is `round(min(opened.tab.height * 0.45, 380))`. The drawing **pane** width is unchanged from `closed.pane.width` and matches the tab width; the transformed iframe bounds lie inside that width and entirely above `opened.list.top`. Inspect both PNGs for readable chart, unobscured controls and usable thread actions rather than treating a zoom percentage as proof. Repeat at a shorter tab height (to exercise the 45% branch) and a taller one (to exercise the 380 px cap), using measured tab heights, and capture the corresponding pairs. Widen the tab to at least 640 px: `drawer` becomes false and the list sits beside the drawing. Return to the narrow layout before continuing.
 - **comment-addressed.** Tag the drawing with `await tab.evaluate(() => { document.querySelector('[data-canvas-diagram]').__probe = 1 })`. Run `await ui.send(tab, '看批注')`, then `await ui.waitForComments(tab, 'addressed', s => s.list?.threads.every(t => t.status === 'addressed' && t.replies.length))`. It resolves within about 3 s of the turn finishing, with the list still open. Check that the agent changed the file. `document.querySelector('[data-canvas-diagram]').__probe` is now `undefined`: DSH remounted the preview for the new bytes, and the list survived it. Proof: `04-addressed.png`.
 - **comment-drift.** Keep the file's text, write it back with `s3` renamed to `s9` everywhere, and wait with `ui.waitForComments` for the thread's `drift` to read `⚠ 图里已没有 s3（批注时是「支付失败」）；「支付失败」现在是 s9`. Proof: `05-drift.png`. Write the original back and wait until `drift` is `null`. When the agent renamed a label while it handled the comment, that thread already shows the `的文字已从` form.
 - **comment-resolve.** `await ui.threadAction(tab, id, '解决')`. The thread leaves the list, and the 已解决 filter reads `已解决 1`. `await ui.toggleFilter(tab, 'resolved')` shows the thread again as `● 已解决` with `['重开', '删除']`. `await ui.threadAction(tab, id, '重开')` turns it back to `open` and `pending` up by one, and `await ui.threadAction(tab, id, '解决')` resolves it again. Proof: `06-resolved.png`, `07-reopened.png`, `08-resolved-again.png`. `$ROUTE "$url" get $file` agrees.
@@ -65,6 +100,6 @@ Dev UI steps (the person's side). Run each step in its own eval and write one `j
 - The agent decides how to answer a comment, and it sometimes renames a label or adds a state. Assert the status, the reply and that the file changed, not an exact source.
 - After an omp `tab.click` in the preview, the next `tab.click` or `tab.press` often failed with `Tab "canvas-dev" is busy` even though the click had landed. The comment helpers click and type through the page itself (`tab.run`); use them rather than raw `tab.click` on comment controls.
 - A page load reopens the last conversation when there is one, instead of a blank session. `ui.open` handles both cases and records only a blank session.
-- In a narrow sidebar the open list takes up to 55 % of the tab, and the drawing shrinks to 25–40 %. Pins and clicks still work. Close the list, or zoom, before taking a screenshot of the drawing.
+- The drawer breakpoint uses the preview tab's measured width, not the browser viewport. Manual zoom/pan is retained, so press 适应窗口 before asserting that the full drawing fits above an open drawer. Do not hide the list to make a cramped screenshot pass; compare its open/closed dimensions and screenshots at the same viewport.
 - In an omp JS eval, end statements with `;`. A line that starts with an assignment is otherwise joined to the line before it as a call, and the step runs twice.
 - Not driven live: `批注没有保存：…` (a refused save) and `读不到批注：…` (the route unreachable). Unit tests cover the route's errors.

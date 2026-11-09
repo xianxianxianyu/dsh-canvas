@@ -8,13 +8,13 @@
 //   - processes whose command line names the run directory or its Chrome scratch profile
 //     (dev-ui.mjs's chromeProfile(run)): ours by construction, so --clean stops them;
 //   - every session the run recorded in `<run>/sessions.json`, and whether canvas-dev's own store
-//     (in dev-ui.mjs's DEV_DATA) lists it as archived;
+//     (in dev-ui.mjs's DEV_DATA) lists it as archived; headless summary sessions use their own store.
 //   - the Chrome scratch profile itself (--clean removes it);
 //   - the evidence files, which nothing here ever deletes.
 // Exit status: 0 when nothing is left over and every run still has evidence, 1 otherwise.
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { archivedIds, chromeProfile, runSessions } from './dev-ui.mjs'
 
@@ -42,7 +42,7 @@ const listener = spawnSync('lsof', ['-nP', '-iTCP:3996', '-sTCP:LISTEN', '-t'], 
 if (listener) report('FAIL', 'port', `3996 still listens (pid ${listener.split('\n').join(', ')}); stop the dev server you started`)
 else report('OK', 'port', '3996 is free')
 
-// Headless runs record no sessions, and canvas-dev's store exists only after its first boot.
+// UI sessions use canvas-dev's store; headless runs below use only their isolated state directory.
 const archived = runs.some(run => runSessions(run).length) ? archivedIds() : new Set()
 
 for (const run of runs) {
@@ -61,6 +61,28 @@ for (const run of runs) {
 
   for (const id of runSessions(run)) {
     report(archived.has(id) ? 'OK' : 'FAIL', 'session', `${id} ${archived.has(id) ? 'archived' : 'NOT archived: open it again and run ui.archive(tab, run)'}`)
+  }
+
+  const summaryPath = join(run, 'summary.json')
+  if (existsSync(summaryPath)) {
+    const { sessionId } = JSON.parse(readFileSync(summaryPath, 'utf8'))
+    if (sessionId) {
+      // Headless has no workspace controller/UI to archive through. After its process exits,
+      // reconcile the same archive list in its own store, never canvas-dev's or the user's.
+      const root = join(run, 'state', 'storages')
+      const path = join(root, 'workspace.json')
+      const workspace = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8'))
+        : { unit: { name: 'workspace', version: 2 }, global: {}, tables: {} }
+      const ids = workspace.global.archivedSessionIds ?? []
+      if (clean && !ours.length && !ids.includes(sessionId)) {
+        workspace.global.archivedSessionIds = [...ids, sessionId]
+        mkdirSync(root, { recursive: true })
+        writeFileSync(`${path}.tmp`, `${JSON.stringify(workspace, null, 2)}\n`)
+        renameSync(`${path}.tmp`, path)
+      }
+      const done = workspace.global.archivedSessionIds?.includes(sessionId)
+      report(done ? 'OK' : 'FAIL', 'session', `${sessionId} ${done ? 'archived in isolated headless store' : 'NOT archived: run leftovers.mjs --clean after it exits'}`)
+    }
   }
 
   // Scratch, not evidence: Chrome's profile for this run.
