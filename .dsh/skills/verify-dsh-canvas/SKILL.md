@@ -1,13 +1,14 @@
 ---
 name: verify-dsh-canvas
-description: "Drive dsh-canvas, the DSH plugin in this repo, the way a user does and keep the proof: the .mmd diagram preview in the right sidebar of the canvas-dev web UI (port 3996), opened from a present card, with comments pinned on its nodes; and the canvas_check and canvas_comment tools through headless DSH. Use for the live check of every canvas unit, after changing the preview, comments, canvas_check, a canvas-* skill or the plugin wiring, and whenever a live check misbehaves."
+description: "Drive dsh-canvas through its real user surfaces: the .mmd diagram preview and comments, the interactive .canvas board tab, and canvas_check/canvas_comment through DSH. Keep screenshots, file diffs, tool records and session ids, then archive every session. Use after changing preview, board interactions, write feedback, recovery, comments, tools, skills or plugin wiring, and whenever a live check misbehaves."
 ---
 
 # Verify dsh-canvas
 
-dsh-canvas has two user-facing surfaces:
+dsh-canvas has three user-facing surfaces:
 
 - **Diagram preview (web UI).** A DSH dev profile `canvas-dev` serves the web UI on `http://127.0.0.1:3996`. A user asks the agent for a diagram, the agent presents a `.mmd` file, and the user opens it from the present card into the right sidebar. There the 图 renderer draws it, and 纯文本 shows the source. In comment mode the user pins comments on its nodes and resolves them in a side list.
+- **Interactive board (web UI).** A presented `.canvas` opens a React Flow board tab: pan/zoom, drag/resize, notes, connections and deletion. File changes replace its state; invalid source is read-only, and lost user batches offer explicit reapply or dismiss. Its diagram, Markdown and image boxes share the composite PNG renderer.
 - **`canvas_check` and `canvas_comment` (agent tools).** The headless profile `canvas-e2e` answers one task and exits. The agent validates a file and, when the model can see images, gets the same picture the sidebar shows, with the user's pending comments listed and framed; it replies to them with `canvas_comment`.
 
 The feature map in [`features/`](features/README.md) has one recipe per feature. This file covers how to start, check, drive, prove and tear down.
@@ -134,7 +135,7 @@ Like the comment helper, it exchanges the whole server URL for the owner cookie.
 each operation's `applied`, `unchanged`, `missing` or `conflict` status. A 2xx response exits 0,
 any other response exits 1, and missing arguments exit 2. It creates no session.
 
-The owner-only GET returns `{ lost: [{ id, at, ops, count }] }` for retained user-operation intent that would apply again to the current board; the helper supplies the encoded absolute `path` query. Use `--anonymous` to prove GET and POST both reject unauthenticated calls. The host retains only the last 20 active applied-operation batches per canonical board, supersedes older intent with newer successful user operations, and excludes dry-run `unchanged`, `missing` and `conflict` outcomes from loss reports. This is bounded, restart-sensitive detection, not overwrite prevention or durable undo. `canvas_check` in that host warns about losses; a user-facing restore action remains unit 4c.
+The owner-only GET returns `{ lost: [{ id, at, ops, count }] }` for retained user-operation intent that would apply again to the current board; the helper supplies the encoded absolute `path` query. Use `--anonymous` to prove GET and POST both reject unauthenticated calls. The host retains only the last 20 active applied-operation batches per canonical board, supersedes older intent with newer successful user operations, and excludes dry-run `unchanged`, `missing` and `conflict` outcomes from loss reports. This is bounded, restart-sensitive detection, not overwrite prevention or durable undo. `canvas_check` in that host warns about losses; the board tab lists exact batches with 重新应用 and 忽略. Route replay alone is not verification of those buttons.
 
 ### Diagram preview through the omp browser
 
@@ -171,6 +172,9 @@ The full journeys are in [`features/diagram-preview.md`](features/diagram-previe
 | Row menu | right-click the row: `置顶会话`, `重命名`, `分叉会话`, `复制 Session ID`, `在 Finder 中显示`, `归档会话` |
 | Blank session | title `新会话`. It has no row menu; Meta+Alt+A archives it |
 | Archived | toast `会话已归档，可撤销或筛选已归档会话`. The id joins `global.archivedSessionIds` in `DEV_DATA/storages/workspace.json` |
+| Board tab | `[data-canvas-board]`, `data-readonly`; `ui.board` reads visible node bounds, edge paths, operation statuses, diagnostics and lost batches |
+| Board gestures | `ui.dragBoardNode`, `finishBoardDrag`, `resizeBoardNode`, `addBoardNote`, `connectBoardNodes`, `deleteBoardNode`, `deleteBoardEdge`; pointer helpers take screen-pixel deltas, note placement takes board coordinates |
+| Board editor/recovery | `[data-canvas-board-editor]` contains a textarea or optional edge-label input; `[data-canvas-lost="<id>"]` lists the exact batch and its 重新应用 / 忽略 buttons |
 
 ## Evidence
 
@@ -226,5 +230,5 @@ All helpers live in `$SKILL/scripts/` and need Node 22.18 or later: `doctor.mjs`
 | `run-headless.mjs` | `node $SKILL/scripts/run-headless.mjs [--model m] [--no-browser] [--name run] [--timeout s] [--cwd dir] [--canvas-root dir] [--patch path]… <prompt \| ->` | one headless turn in `$OUT/<run>`; prints the session id and every `canvas_check` and `canvas_comment` result; records optional overlays | 0 completed, 1 not, 2 usage or setup |
 | `comments-route.mjs` | `node $SKILL/scripts/comments-route.mjs [--anonymous] <dsh web url> get <path> \| post <json \| ->` | one call to the comment route of a running canvas-dev | 0 for 2xx, 1 otherwise, 2 usage |
 | `board-route.mjs` | `node $SKILL/scripts/board-route.mjs [--anonymous] <dsh web url> get <path> \| post <json \| ->` | one call to the board route; prints lost batches on GET or per-op statuses on POST | 0 for 2xx, 1 otherwise, 2 usage |
-| `dev-ui.mjs` | `const ui = await import('$SKILL/scripts/dev-ui.mjs')` in an omp JS eval | `open`, `send`, `previewFile`, `sidebar`, `waitForSidebar`, `rendererMenu`, `chooseRenderer`, `shot`, `currentSession`, `archive`, `runSessions`, `archivedIds`, `chromeProfile`; for comments `comments`, `waitForComments`, `commentMode`, `escape`, `addComment`, `openComments`, `toggleFilter`, `threadAction` and the selector builders `node`, `pin`, `thread`, `filter`; `DEV_DATA`, and `SEL` (the handles) | throws with the step that timed out |
+| `dev-ui.mjs` | `const ui = await import('$SKILL/scripts/dev-ui.mjs')` in an omp JS eval | `open`, `send`, `previewFile`, `sidebar`, `waitForSidebar`, `rendererMenu`, `chooseRenderer`, `shot`, `currentSession`, `archive`, `runSessions`, `archivedIds`, `chromeProfile`; comments: `comments`, `waitForComments`, `commentMode`, `escape`, `addComment`, `openComments`, `toggleFilter`, `threadAction`; board: `board`, `waitForBoard`, `dragBoardNode`, `finishBoardDrag`, `resizeBoardNode`, `addBoardNote`, `connectBoardNodes`, `deleteBoardNode`, `deleteBoardEdge`; selectors and `DEV_DATA` | throws with the step that timed out |
 | `leftovers.mjs` | `node $SKILL/scripts/leftovers.mjs [--clean] <run-dir>…` | the cleanup report, and with `--clean` the cleanup itself | 0 clean, 1 something left |

@@ -41,6 +41,17 @@ One node or one edge per line, tab indents, exactly like this. The user's board 
 
 The user can move and resize boxes, add notes and arrows, and delete things on the same board; their changes are written into this file.
 
+Tell the user they can open the presented board, drag nodes, select one and resize its corners,
+double-click empty space to add a note, double-click a text note to edit Markdown, connect the
+side dots (with an optional label), and delete a selection. These edits save back to this file.
+The tab follows file changes automatically; malformed board source makes it read-only until fixed.
+When retained changes were overwritten, it lists the exact batches with **重新应用** and **忽略**.
+Reapply is the user's explicit choice, never an automatic merge; ignoring hides the warning in
+that tab only. `canvas_check` still reports retained overwritten user changes.
+
+Board comment authoring is not available yet. Do not promise node/edge pins on boards; use the
+diagram preview's existing comment UI when an embedded diagram needs discussion.
+
 - Create a new board with `write`; change an existing board with `edit`, **never a whole-file `write`**. A rewrite from a remembered copy can erase the user's layout, notes and arrows.
 - Keep each edit to the intended fields, using the smallest matching text hunk. DSH 0.2.2-rc.1 defaults `fs-observation-policy` **off**: `edit` applies its hunk to the current file atomically, so a user geometry change and your independent text change can both survive without a re-read. This is not a stale-version guard or a guarantee for overlapping changes. Do not replace a remembered whole node line when you only need to change its text.
 - If the hunk no longer matches, re-read and adapt it to the current board. If an optional `fs-observation-policy` is enabled, a stale `edit` or overwriting `write` instead fails with `FS_STALE_VERSION` (`file changed since it was read — re-read the file, then retry`); re-read, preserve the user's changes, and retry with `edit`. The canvas plugin does not enable that policy globally.

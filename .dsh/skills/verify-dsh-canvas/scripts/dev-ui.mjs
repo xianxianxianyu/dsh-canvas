@@ -44,6 +44,7 @@ export const SEL = {
   comments: '[data-canvas-comments]',
   /** The form that opens on a clicked node in comment mode. */
   draft: '[data-canvas-draft]',
+  board: '[data-canvas-board]',
 }
 
 /** A node's click box over the preview (comment mode), a node's pin, a thread, a status filter. */
@@ -144,7 +145,7 @@ export async function previewFile(tab, path) {
   const button = (await elements(tab)).find(e => e.role === 'button' && e.name === `在侧边栏预览 ${real}`)
   if (!button) throw new Error(`dev-ui: no 在侧边栏预览 button for ${real}; the agent did not present it`)
   await tab.id(button.id).click()
-  await poll('the sidebar preview', () => tab.evaluate(sel => Boolean(document.querySelector(sel.previewFrame) || document.querySelector(sel.previewError)), SEL), 15_000)
+  await poll('the sidebar preview', () => tab.evaluate(sel => Boolean(document.querySelector(sel.previewFrame) || document.querySelector(sel.previewError) || document.querySelector(sel.board)), SEL), 15_000)
 }
 
 /** What the sidebar shows now: the diagram page, the error text, or neither (another renderer). */
@@ -226,6 +227,120 @@ export async function waitForComments(tab, what, test, timeoutMs = 20_000) {
 // click had landed; raw page input never did.
 const click = (tab, selector) => tab.run(async ({ page }, target) => { await page.click(target) }, { args: [selector] })
 const press = (tab, key) => tab.run(async ({ page }, name) => { await page.keyboard.press(name) }, { args: [key] })
+
+/** The board's visible geometry and feedback, not a private React store. */
+export async function board(tab) {
+  return tab.evaluate(() => {
+    const root = document.querySelector('[data-canvas-board]')
+    if (!root) return null
+    const rect = el => el.getBoundingClientRect().toJSON()
+    return {
+      readonly: root.getAttribute('data-readonly') === 'true',
+      nodes: [...root.querySelectorAll('.react-flow__node')].map(el => ({
+        id: el.dataset.id, transform: el.style.transform, width: el.style.width, height: el.style.height,
+        rect: rect(el), srcdoc: el.querySelector('iframe')?.srcdoc ?? null,
+      })),
+      edges: [...root.querySelectorAll('.react-flow__edge')].map(el => ({ id: el.dataset.id, path: el.querySelector('.react-flow__edge-path')?.getAttribute('d') })),
+      status: root.querySelector('[data-canvas-board-status]')?.textContent ?? null,
+      errors: [...root.querySelectorAll('[role="alert"]')].map(el => el.textContent),
+      lost: [...root.querySelectorAll('[data-canvas-lost]')].map(el => ({ id: el.dataset.canvasLost, text: el.textContent })),
+    }
+  })
+}
+
+export async function waitForBoard(tab, what, test, timeoutMs = 20_000) {
+  return poll(what, async () => { const state = await board(tab); return state && test(state) ? state : undefined }, timeoutMs, 150)
+}
+
+/** Real pointer gesture; delta is in screen pixels. End=false leaves the pointer down for an agent-write race. */
+export async function dragBoardNode(tab, id, dx, dy, { end = true } = {}) {
+  return tab.run(async ({ page }, id, dx, dy, end) => {
+    const box = await (await page.$(`.react-flow__node[data-id="${id}"]`))?.boundingBox()
+    if (!box) throw new Error(`board node ${id} is not visible`)
+    const from = { x: box.x + box.width / 2, y: box.y + Math.min(30, box.height / 2) }
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    await page.mouse.move(from.x + dx, from.y + dy, { steps: 12 })
+    if (end) await page.mouse.up()
+    return { from, to: { x: from.x + dx, y: from.y + dy } }
+  }, { args: [id, dx, dy, end] })
+}
+
+export async function finishBoardDrag(tab) {
+  await tab.run(async ({ page }) => { await page.mouse.up() })
+}
+
+export async function resizeBoardNode(tab, id, dx, dy) {
+  await tab.run(async ({ page }, id, dx, dy) => {
+    const node = `.react-flow__node[data-id="${id}"]`
+    await page.click(node)
+    const box = await (await page.$(`${node} .react-flow__resize-control.handle.bottom.right`))?.boundingBox()
+    if (!box) throw new Error('board resize handle is not visible')
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy, { steps: 10 })
+    await page.mouse.up()
+  }, { args: [id, dx, dy] })
+}
+
+/** Board coordinates; choose a point outside every current node. */
+export async function addBoardNote(tab, point, text) {
+  await tab.run(async ({ page }, point, text) => {
+    const screen = await page.evaluate(point => {
+      const flow = document.querySelector('[data-canvas-board] .react-flow')
+      const matrix = new DOMMatrix(getComputedStyle(flow.querySelector('.react-flow__viewport')).transform)
+      const box = flow.getBoundingClientRect()
+      return { x: box.x + matrix.e + point.x * matrix.a, y: box.y + matrix.f + point.y * matrix.d }
+    }, point)
+    await page.mouse.click(screen.x, screen.y, { count: 2 })
+    await page.waitForSelector('[data-canvas-board-editor] textarea')
+    await page.type('[data-canvas-board-editor] textarea', text)
+    await page.click('[data-canvas-board-editor] button[type="submit"]')
+  }, { args: [point, text] })
+}
+
+export async function connectBoardNodes(tab, from, to, label = '', fromSide = 'right', toSide = 'left') {
+  await tab.run(async ({ page }, from, to, label, fromSide, toSide) => {
+    const handle = async (id, side) => (await page.$(`.react-flow__node[data-id="${id}"] .react-flow__handle[data-handleid="${side}"]`))?.boundingBox()
+    const a = await handle(from, fromSide)
+    const b = await handle(to, toSide)
+    if (!a || !b) throw new Error('board connection handles are not visible')
+    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 12 })
+    await page.mouse.up()
+    await page.waitForSelector('[data-canvas-board-editor] input')
+    await page.type('[data-canvas-board-editor] input', label)
+    await page.click('[data-canvas-board-editor] button[type="submit"]')
+  }, { args: [from, to, label, fromSide, toSide] })
+}
+
+/** Pick an exposed edge segment; its midpoint may be underneath a node. */
+export async function deleteBoardEdge(tab, id) {
+  await tab.run(async ({ page }, id) => {
+    const point = await page.evaluate(id => {
+      const edge = document.querySelector(`.react-flow__edge[data-id="${id}"]`)
+      const path = edge?.querySelector('.react-flow__edge-path')
+      if (!path) throw new Error(`board edge ${id} is missing`)
+      for (const fraction of [.5, .25, .75, .1, .9]) {
+        const local = path.getPointAtLength(path.getTotalLength() * fraction)
+        const screen = new DOMPoint(local.x, local.y).matrixTransform(path.getScreenCTM())
+        if (document.elementFromPoint(screen.x, screen.y)?.closest('.react-flow__edge') === edge) return { x: screen.x, y: screen.y }
+      }
+      throw new Error(`board edge ${id} has no exposed hit target; move an overlapping node first`)
+    }, id)
+    await page.mouse.click(point.x, point.y)
+    await page.waitForSelector(`.react-flow__edge.selected[data-id="${id}"]`)
+    await page.keyboard.press('Delete')
+  }, { args: [id] })
+}
+
+export async function deleteBoardNode(tab, id) {
+  await tab.run(async ({ page }, id) => {
+    await page.click(`.react-flow__node[data-id="${id}"]`)
+    await page.keyboard.press('Delete')
+  }, { args: [id] })
+}
 
 /**
  * Turn comment mode on or off with the 批注 button, or with the C key after clicking an empty
