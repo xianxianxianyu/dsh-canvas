@@ -1,7 +1,7 @@
 /**
  * Recent user intent, not an undo log or a second file store. DSH may run without its optional
  * observation policy, so an agent's whole-file write can erase an acknowledged route edit.
- * Keep at most 20 applied batches per canonical board in this host lifetime and dry-run them
+ * Keep at most 20 written batches per canonical board in this host lifetime and dry-run them
  * when checked. Only replayable `applied` outcomes are loss; missing targets and text conflicts
  * remain conflicts, not a reason to blindly restore content. Restart/eviction ends this coverage.
  */
@@ -64,7 +64,7 @@ export class BoardJournal {
     return this.enqueue(path, async () => {
       signal.throwIfAborted()
       const outcome = await writeBoardOps(fs, target, ops, signal)
-      if (outcome.kind === 'done') this.record(path, ops, outcome.statuses)
+      if (outcome.kind === 'done' && outcome.written) this.record(path, ops, outcome.statuses)
       return outcome
     })
   }

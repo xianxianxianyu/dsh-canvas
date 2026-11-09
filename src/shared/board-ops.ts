@@ -12,7 +12,7 @@ import type { JsonNode } from './json.ts'
 import type { Diagnostic } from './report.ts'
 
 /**
- * `applied`: the file changed. `unchanged`: it already said so (a replay, or someone did the same).
+ * `applied`: this op changed the working text (later ops may undo it). `unchanged`: it already said so.
  * `missing`: the node it needs is gone. `conflict`: the id or the note text is not what the op expects.
  */
 export type OpStatus = 'applied' | 'unchanged' | 'missing' | 'conflict'

@@ -1,7 +1,7 @@
 [
   {
     "case": "full",
-    "states": "10,268",
+    "states": "9,352",
     "broken": [],
     "held": [
       "TypeOK",
@@ -19,7 +19,7 @@
   },
   {
     "case": "policy-off",
-    "states": "21,205",
+    "states": "20,193",
     "broken": [
       "NoLostAcknowledgedChange"
     ],
@@ -152,7 +152,7 @@
   },
   {
     "case": "chart",
-    "states": "33",
+    "states": "31",
     "broken": [],
     "held": [
       "TypeOK",

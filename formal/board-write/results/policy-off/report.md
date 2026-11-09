@@ -1,6 +1,6 @@
 # BoardWrite
 
-TLC reached 21,205 states, more than the chart budget of 500, so the chart draws only the bug paths: 14 states and 12 arrows.
+TLC reached 20,193 states, more than the chart budget of 500, so the chart draws only the bug paths: 14 states and 12 arrows.
 The step the agent attempts its write or matching hunk edit changes YourSave and Agent at the same time.
 
 ## NoLostAcknowledgedChange breaks

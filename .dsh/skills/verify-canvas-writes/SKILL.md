@@ -14,8 +14,9 @@ acknowledged change, not whether a parser accepts arbitrary input.
 ## Coverage and synchronization
 
 **Source synchronization:** canvas same-commit subject
-`test(integrate): verify merged adversarial fixes` (merged board-core, contracts,
-raster and mock; indexed parsing, per-field intent and publication mappings reconfirmed); DSH source
+`fix(board): journal only batches that were written` (`BoardWrite.done.written`
+reports publication independently of per-op statuses; unwritten batches skip
+journal recording, including net-zero mixed batches); DSH source
 `b830ec950faba0a46dda564be3e2d854afed94f1` (rc.5). The model, all configurations,
 scratch controls and recorded results were rerun together. The installed 0.2.2-rc.1 P1
 probe found the observation policy disabled, unlike that source default. Thus
@@ -42,7 +43,7 @@ Function names remain authoritative when line numbers move.
 | `RouteAppliesBatch` | `board-write.ts` `writeBoardOps` validation/no-change branch; `board-ops.ts` `applyBoardOps`, `applyFields`, `applyOne`: field runs share a parse/splice pass but preserve per-op order/status; deletions splice incident edges and nodes together. |
 | `RouteWritesVersion` | `board-write.ts:57-59` step 4; `DSH/packages/fs/fs-local/src/index.ts:202-254` `LocalFileSystem.writeText`: `withLock`, version guard, atomic publication. |
 | `RouteRetriesStale` | `board-write.ts:60-65` step 5: stale only, three rounds, busy. Other I/O errors and abort are outside this model. |
-| `RouteRecordsIntent` | `src/host/board-journal.ts` `BoardJournal.apply` / `enqueue` / `record`: serialize routes per path, record only applied ops after publication and **before** HTTP success. A later applied request creates new retained intent, not the previously declined batch. |
+| `RouteRecordsIntent` | `src/host/board-journal.ts` `BoardJournal.apply` / `enqueue` / `record`: serialize routes per path, record applied ops only when `writeBoardOps` returns `written: true`, after publication and **before** HTTP success. No-write results go directly to reply; per-op `applied` statuses alone do not prove publication. A later written request creates new retained intent, not the previously declined batch. |
 | `JournalFlagsLoss`, `NoSilentLoss` | `BoardJournal.lost`: dry-run current text, any applied status means recoverable loss. The result is cached by source text for each path; `record` and `decline` invalidate it when journal intent changes. `handleBoard` GET and `checkFile` expose losses or explicitly report invalid source. Cache reuse changes no modeled observation. |
 | `YouReapplyChange` | Reapply submits the same ops through `handleBoard` / `BoardJournal.apply`; an unchanged retry does not create a batch. |
 | `YouDeclineRecovery`, `DeclinedNeverReported` | `handleBoard` POST `{ sessionId?, path, decline: batchIds }` awaits `BoardJournal.decline` and echoes `{ declined: batchIds }`. `decline` uses the same per-path `enqueue` as `apply` and physically removes the selected retained batches. Absent IDs succeed; other batches/paths and board bytes are unchanged. The action models successful queued completion, not a local banner dismissal. |
@@ -134,8 +135,8 @@ retention bound. `Fields.cfg` separately checks resize → agent width edit → 
 loss inspection → agent position edit → reapply. It retains old width/height under
 batch/time 1 and new x/y under batch/time 2. No restart or eviction is modeled.
 
-Recorded exhaustive outcomes: policy on **10,268 states**, all eleven rules hold;
-policy off **21,205 states**, only `NoLostAcknowledgedChange` fails, while
+Recorded exhaustive outcomes: policy on **9,352 states**, all eleven rules hold;
+policy off **20,193 states**, only `NoLostAcknowledgedChange` fails, while
 `NoSilentLoss`, `DeclinedNeverReported`, `RecoveryEventually` and the other seven
 rules hold. The retained-decline negative control reaches **276 states** and
 breaks `DeclinedNeverReported` after twelve steps. These are bounded results,
@@ -145,7 +146,7 @@ The field projection reaches **7 states** with all four rules holding. Its
 merged-label control also reaches 7 states: identity fails after 3 steps and
 exact-field recovery fails after 6. The real-code scratch control reproduces both.
 
-`Chart.cfg` has zero agent publications and two sends: **33 states**, all eleven
+`Chart.cfg` has zero agent publications and two sends: **31 states**, all eleven
 rules hold. It explains the person save workflow, not concurrency or decline.
 Full safe runs exceed statechart's 500-state drawing budget; the policy-off and
 retained-decline charts show their bug paths.
@@ -186,6 +187,12 @@ The merged-label code mutant restores the old `{ ...old, ...next }` rule. Its
 resize is reported as `board-2` rather than `board-1`, and recovery moves x back
 to 40 instead of retaining the agent's 60. The normal code retains width/height
 under the resize's original id/time, and its replay leaves x/y untouched.
+The net-zero real-code probe submits `place x=1; place x=0` to an `x=0` board:
+both statuses are `applied`, but bytes/version/write count stay unchanged,
+`written` is false, and a later external `x=5` edit produces no recovery batch.
+The record-unwritten scratch mutant removes only the publication guard and
+must report one fictitious lost batch. Arbitrary mixed batches remain outside
+the bounded TLA+ projection; this probe covers the exact cross-check input.
 
 ## Read a counterexample
 

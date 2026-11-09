@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { posix } from 'node:path'
 import test from 'node:test'
 import { parseBoard } from '../src/shared/board.ts'
-import { MAX_ATTEMPTS } from '../src/host/board-write.ts'
+import { MAX_ATTEMPTS, writeBoardOps } from '../src/host/board-write.ts'
 import { boardRoute } from '../src/host/route.ts'
 import { BoardJournal, BOARD_JOURNAL_LIMIT } from '../src/host/board-journal.ts'
 import { canvasCheckTool } from '../src/host/check.ts'
@@ -114,6 +114,48 @@ test('ops are applied with a version check and answered op by op', async () => {
   const again = await post({ path: PATH, ops: [{ op: 'place', id: 'why', x: 600, y: 40 }] })
   assert.deepEqual(again, { status: 200, body: { version: version(), statuses: ['unchanged'] } })
   assert.deepEqual(fs.log, ['stat', 'read'])
+})
+
+test('a net-zero batch leaves bytes/version untouched and creates no recovery history', async () => {
+  const before = '{"nodes":[{"id":"a","type":"text","text":"A","x":0,"y":0,"width":100,"height":100}]}'
+  const { post, get, fs, text, version } = harness({ [PATH]: before })
+  const initialVersion = version()
+  const result = await post({ path: PATH, ops: [{ op: 'place', id: 'a', x: 1 }, { op: 'place', id: 'a', x: 0 }] })
+  assert.deepEqual(result, { status: 200, body: { version: initialVersion, statuses: ['applied', 'applied'] } })
+  assert.equal(text(), before)
+  assert.equal(version(), initialVersion)
+  assert.equal(fs.log.includes('write'), false)
+  fs.put(PATH, before.replace('"x":0', '"x":5'))
+  assert.deepEqual((await get()).body, { lost: [] }, 'an unwritten batch cannot become a lost edit')
+
+  // Positive control: a written batch is retained, and a no-write resend does not replace it.
+  const ops = [{ op: 'place', id: 'a', x: 8 }]
+  assert.deepEqual((await post({ path: PATH, ops })).body.statuses, ['applied'])
+  const writtenVersion = version()
+  fs.log.length = 0
+  assert.deepEqual(await post({ path: PATH, ops }), { status: 200, body: { version: writtenVersion, statuses: ['unchanged'] } })
+  assert.equal(fs.log.includes('write'), false)
+  fs.put(PATH, before.replace('"x":0', '"x":5'))
+  const lost = (await get()).body.lost
+  assert.deepEqual(lost.map(({ id, ops, count }) => ({ id, ops, count })), [{ id: 'board-1', ops, count: 1 }])
+  await post({ path: PATH, ops: lost[0].ops })
+  assert.equal(nodeOf(text(), 'a').x, 8)
+  assert.deepEqual((await get()).body, { lost: [] })
+})
+
+test('the board writer reports publication separately from per-op statuses', async () => {
+  const before = '{"nodes":[{"id":"a","type":"text","text":"A","x":0,"y":0,"width":100,"height":100}]}'
+  const fs = memoryFs({ [PATH]: before })
+  const apply = ops => writeBoardOps(fs, { displayPath: PATH }, ops, new AbortController().signal)
+  const netZero = await apply([{ op: 'place', id: 'a', x: 1 }, { op: 'place', id: 'a', x: 0 }])
+  assert.deepEqual(netZero, { kind: 'done', written: false, version: 'v1', statuses: ['applied', 'applied'] })
+  assert.equal(fs.log.includes('write'), false)
+  const written = await apply([{ op: 'place', id: 'a', x: 1 }])
+  assert.deepEqual(written, { kind: 'done', written: true, version: 'v2', statuses: ['applied'] })
+  fs.log.length = 0
+  const replay = await apply([{ op: 'place', id: 'a', x: 1 }])
+  assert.deepEqual(replay, { kind: 'done', written: false, version: 'v2', statuses: ['unchanged'] })
+  assert.equal(fs.log.includes('write'), false)
 })
 
 test('an agent write between the route\'s read and its write is kept, and the op is replayed on top of it', async () => {

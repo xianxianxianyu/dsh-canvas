@@ -59,7 +59,7 @@ export function step(action: string, from: State, to: State) {
   if (action === 'RouteStatsFile' && to.route.phase === 'not-found') return 'the file is absent';
   if (action === 'RouteAppliesBatch') {
     if (to.route.phase === 'invalid-source') return 'invalid JSON is refused';
-    if (to.route.phase === 'journal') return 'the note is already there; no write';
+    if (to.route.phase === 'reply') return 'the note is already there; no write or journal entry';
   }
   if (action === 'RouteWritesVersion' && to.route.phase === 'retry') return 'the version changed; write refused';
   if (action === 'RouteRetriesStale' && to.route.phase === 'busy') return 'three rounds lost; answer busy';

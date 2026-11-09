@@ -27,7 +27,8 @@ async function journalMutant(before, after) {
     .replace("'./board-write.ts'", JSON.stringify(writerURL.href))
   return (await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)).BoardJournal
 }
-const NoJournal = await journalMutant("if (outcome.kind === 'done') this.record(path, ops, outcome.statuses)", '')
+const NoJournal = await journalMutant("if (outcome.kind === 'done' && outcome.written) this.record(path, ops, outcome.statuses)", '')
+const RecordUnwritten = await journalMutant(' && outcome.written', '')
 const RetainDeclined = await journalMutant('.filter(batch => !declined.has(batch.id))', '.filter(() => true)')
 const MergeLabels = await journalMutant('for (const next of applied) {', `for (let next of applied) {
   if (next.op === 'place') {
@@ -102,9 +103,10 @@ for (const [label, writer] of [['current invalid guard', writeBoardOps], ['skip-
 }
 {
   const fs = new File()
-  assert.equal((await writeBoardOps(fs, target, ops, signal)).kind, 'done')
+  assert.equal((await writeBoardOps(fs, target, ops, signal)).written, true)
   const before = { text: fs.text, version: fs.version, writes: fs.writes }
-  assert.equal((await writeBoardOps(fs, target, ops, signal)).kind, 'done')
+  const replay = await writeBoardOps(fs, target, ops, signal)
+  assert.deepEqual(replay, { kind: 'done', written: false, version: String(before.version), statuses: ['unchanged'] })
   assert.deepEqual({ text: fs.text, version: fs.version, writes: fs.writes }, before)
   evidence.push({ scenario: 'resend after lost reply', result: 'same bytes, version and write count' })
 }
@@ -115,6 +117,23 @@ for (const [label, writer] of [['current invalid guard', writeBoardOps], ['skip-
   await replayWrites(fs, target, ops, signal)
   assert.equal(fs.version, before + 1)
   evidence.push({ scenario: 'no-change guard scratch mutant', result: 'resend changes version' })
+}
+for (const Journal of [BoardJournal, RecordUnwritten]) {
+  const fs = new File()
+  fs.text = '{"nodes":[{"id":"a","type":"text","text":"A","x":0,"y":0,"width":100,"height":100}]}'
+  const before = fs.text
+  const journal = new Journal()
+  const outcome = await journal.apply(fs, target, target.displayPath, [
+    { op: 'place', id: 'a', x: 1 }, { op: 'place', id: 'a', x: 0 },
+  ], signal)
+  assert.deepEqual(outcome, { kind: 'done', written: false, version: '0', statuses: ['applied', 'applied'] })
+  assert.deepEqual({ text: fs.text, version: fs.version, writes: fs.writes }, { text: before, version: 0, writes: 0 })
+  fs.text = before.replace('"x":0', '"x":5')
+  fs.version++
+  const lost = journal.lost(target.displayPath, fs.text)
+  assert.equal(lost.length, Journal === BoardJournal ? 0 : 1)
+  evidence.push({ scenario: Journal === BoardJournal ? 'net-zero batch is not journaled' : 'record-unwritten scratch mutant',
+    written: outcome.written, writes: fs.writes, detectedBatches: lost.length })
 }
 for (const Journal of [BoardJournal, NoJournal]) {
   const fs = new File()

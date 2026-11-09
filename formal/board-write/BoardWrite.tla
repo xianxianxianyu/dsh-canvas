@@ -78,12 +78,13 @@ RouteReadsText ==
   /\ UNCHANGED <<file, agent, acknowledged, wroteOverInvalid, replayChanged>>
 
 \* Step 3 and no-change branch, board-write.ts:51-55; board-ops.ts:53-58,73-78.
+\* No publication means no journal call; the route answers directly with written = FALSE.
 RouteAppliesBatch ==
   /\ route.phase = "apply"
   /\ route' = [route EXCEPT !.steps = @ + 1,
        !.phase = IF CheckValidity /\ ~route.valid THEN "invalid-source"
                  ELSE IF SkipUnchanged /\ Apply(route.text) = route.text
-                      THEN "journal" ELSE "write"]
+                      THEN "reply" ELSE "write"]
   /\ UNCHANGED <<file, agent, acknowledged, wroteOverInvalid, replayChanged>>
 
 \* Step 4 + provider's lock: board-write.ts:57-59; fs-local/index.ts:208-254.
@@ -111,8 +112,9 @@ RouteRetriesStale ==
           !.round = IF @ = MaxAttempts THEN @ ELSE @ + 1]
   /\ UNCHANGED <<file, agent, acknowledged, wroteOverInvalid, replayChanged>>
 
-\* BoardJournal.apply / record. Record after writeBoardOps success, before HTTP
-\* acknowledgement. Applied ops create a new batch, distinct from a declined one.
+\* BoardJournal.apply / record. route.changed is writeBoardOps' written result:
+\* only a published batch records applied intent, before HTTP acknowledgement.
+\* A written batch creates new intent, distinct from a declined one.
 RouteRecordsIntent ==
   /\ route.phase = "journal"
   /\ route' = [route EXCEPT !.phase = "reply", !.steps = @ + 1,

@@ -15,8 +15,8 @@ import type { FileSystem, FsTarget } from './dsh.ts'
 export const MAX_ATTEMPTS = 3
 
 export type BoardWrite =
-  /** Written (or nothing to write); `version` is the file's version now. */
-  | { readonly kind: 'done'; readonly version: string; readonly statuses: readonly OpStatus[] }
+  /** `written` distinguishes publication from no change; `version` comes from that write or the read. */
+  | { readonly kind: 'done'; readonly written: boolean; readonly version: string; readonly statuses: readonly OpStatus[] }
   /** The file is not a valid board; nothing was written. */
   | { readonly kind: 'invalid-source'; readonly diagnostics: readonly Diagnostic[] }
   | { readonly kind: 'not-found' }
@@ -52,11 +52,11 @@ export async function writeBoardOps(fs: Pick<FileSystem, 'stat' | 'readText' | '
     const edit = applyBoardOps(text, ops)
     if (!edit.ok) return { kind: 'invalid-source', diagnostics: edit.diagnostics }
     // Nothing changed (a replay, or nothing left to do): no write, so the agent's view stays current.
-    if (edit.text === text) return { kind: 'done', version: info.version, statuses: edit.statuses }
+    if (edit.text === text) return { kind: 'done', written: false, version: info.version, statuses: edit.statuses }
     // 4. Write only over the version read in step 1.
     try {
       const written = await fs.writeText(target, edit.text, { kind: 'replaceIfVersion', version: info.version }, signal)
-      return { kind: 'done', version: written.version, statuses: edit.statuses }
+      return { kind: 'done', written: true, version: written.version, statuses: edit.statuses }
     } catch (error) {
       // 5. Someone wrote after step 1: start over from their text.
       if (codeOf(error) !== 'FS_STALE_VERSION') throw error

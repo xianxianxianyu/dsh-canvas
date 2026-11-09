@@ -45,6 +45,18 @@
     "result": "resend changes version"
   },
   {
+    "scenario": "net-zero batch is not journaled",
+    "written": false,
+    "writes": 0,
+    "detectedBatches": 0
+  },
+  {
+    "scenario": "record-unwritten scratch mutant",
+    "written": false,
+    "writes": 0,
+    "detectedBatches": 1
+  },
+  {
     "scenario": "policy-off detection and reapply",
     "detectedBatches": 1,
     "facts": [
