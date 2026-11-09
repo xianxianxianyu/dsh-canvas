@@ -15,6 +15,7 @@ The sanitizer re-parses its serialized output and only renders a stable, passive
 - Set the intended viewport in the head: `<meta name="canvas-viewport" content="390x844">` for mobile or `1280x800` for desktop. Without a marker the default is desktop, 1280×800. The preview can switch to the desktop/mobile presets without editing the file; `canvas_check` uses the file's viewport.
 - Use real, specific copy: a plausible product name, meaningful field labels, useful errors, clear actions, and realistic data. Avoid lorem ipsum and rows of generic placeholders.
 - Keep one screen in each file, with deliberate hierarchy, spacing, typography, contrast and focus. Design for the declared dimensions; use `box-sizing: border-box` and responsive widths rather than hiding accidental horizontal overflow.
+- Element ids and form names are preserved, including names matching DOM APIs; inspection and picking use native prototype methods rather than named document properties.
 - Give anything people may comment on a stable `id` or `data-canvas-id`, especially buttons, links, inputs, selects, textareas and elements with `role="button"`. Prefer short meaningful ids such as `login-submit`; keep them when revising. The element's visible text is the comment label. Do not reuse an anchor on two elements.
 - A static control should look like its intended state. It does not need a click handler, form action or live authentication to communicate the design.
 

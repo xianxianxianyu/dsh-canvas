@@ -243,3 +243,22 @@ test('rapid srcdoc replacements cannot publish geometry from a detached document
     assert.equal(await page.locator('iframe').count(), 0)
   })
 })
+
+test('DOM-clobbering names cannot break parent inspection or element picking', { skip }, async () => {
+  await withPreview(async page => {
+    await comment(page, 'submit', 'Safe picking')
+    assert.deepEqual(await page.evaluate(() => window.posts[0].ops[0].anchor), { target: 'send', label: '继续' })
+  }, undefined, SOURCE.replace('<body>', '<body><img name="defaultView" alt=""><img name="elementFromPoint" alt=""><img name="body" alt="">'))
+})
+
+test('form controls and document names cannot shadow native inspection and picking APIs', { skip }, async () => {
+  const documentNames = ['URL', 'readyState', 'documentElement', 'fonts', 'querySelectorAll', 'addEventListener', 'removeEventListener']
+  const formNames = ['getAttribute', 'getBoundingClientRect', 'checkVisibility', 'querySelectorAll', 'innerText', 'textContent', 'tagName', 'namespaceURI', 'childNodes', 'parentElement', 'scrollWidth', 'scrollHeight', 'clientWidth', 'clientHeight']
+  const fields = formNames.map(name => `<input type="hidden" name="${name}">`).join('')
+  const source = SOURCE.replace('<body>', `<body>${documentNames.map(name => `<img name="${name}" alt="">`).join('')}`)
+    .replace('<section id="panel">', `<form id="panel">${fields}`).replace('</section>', '</form>')
+  await withPreview(async page => {
+    await comment(page, 'submit', 'Native APIs')
+    assert.deepEqual(await page.evaluate(() => window.posts[0].ops[0].anchor), { target: 'send', label: '继续' })
+  }, undefined, source)
+})

@@ -63,6 +63,10 @@ function MockBody({ content, resourceAddress, t }: DocumentBodyProps): ReactNode
     let document: Document | undefined
     let observer: ResizeObserver | undefined
     let pending: number | undefined
+    const urlOf = Object.getOwnPropertyDescriptor(Document.prototype, 'URL')!.get!
+    const readyStateOf = Object.getOwnPropertyDescriptor(Document.prototype, 'readyState')!.get!
+    const rootOf = Object.getOwnPropertyDescriptor(Document.prototype, 'documentElement')!.get!
+    const fontsOf = Object.getOwnPropertyDescriptor(Document.prototype, 'fonts')!.get!
     const measure = (): void => {
       pending = undefined
       if (!active || document === undefined || frame.current !== element || element.contentDocument !== document) return
@@ -75,16 +79,16 @@ function MockBody({ content, resourceAddress, t }: DocumentBodyProps): ReactNode
       if (!active || frame.current !== element) return
       const next = element.contentDocument
       // A new iframe initially exposes about:blank; its geometry must never replace the srcdoc's.
-      if (next === null || next.URL !== 'about:srcdoc' || next.readyState !== 'complete') return
+      if (next === null || urlOf.call(next) !== 'about:srcdoc' || readyStateOf.call(next) !== 'complete') return
       observer?.disconnect()
-      document?.removeEventListener('load', schedule, true)
+      if (document !== undefined) EventTarget.prototype.removeEventListener.call(document, 'load', schedule, true)
       document = next
       live.current = { frame: element, document }
       observer = new ResizeObserver(schedule)
-      observer.observe(document.documentElement)
-      for (const target of document.querySelectorAll('[id], [data-canvas-id]')) observer.observe(target)
-      document.addEventListener('load', schedule, true)
-      void document.fonts.ready.then(schedule)
+      observer.observe(rootOf.call(document) as HTMLElement)
+      for (const target of Document.prototype.querySelectorAll.call(document, '[id], [data-canvas-id]')) observer.observe(target)
+      EventTarget.prototype.addEventListener.call(document, 'load', schedule, true)
+      void (fontsOf.call(document) as FontFaceSet).ready.then(schedule)
       measure()
     }
     element.addEventListener('load', loaded)
@@ -93,7 +97,7 @@ function MockBody({ content, resourceAddress, t }: DocumentBodyProps): ReactNode
       active = false
       if (pending !== undefined) cancelAnimationFrame(pending)
       observer?.disconnect()
-      document?.removeEventListener('load', schedule, true)
+      if (document !== undefined) EventTarget.prototype.removeEventListener.call(document, 'load', schedule, true)
       element.removeEventListener('load', loaded)
       if (live.current?.frame === element) live.current = undefined
     }
@@ -116,11 +120,13 @@ function MockBody({ content, resourceAddress, t }: DocumentBodyProps): ReactNode
         const current = live.current
         if (current === undefined || frame.current !== current.frame || current.frame.contentDocument !== current.document) return undefined
         const document = current.document
-        let element = document.elementFromPoint(x - (document.defaultView?.scrollX ?? 0), y - (document.defaultView?.scrollY ?? 0))
+        const window = current.frame.contentWindow!
+        let element = Document.prototype.elementFromPoint.call(document, x - window.scrollX, y - window.scrollY)
+        const parentOf = Object.getOwnPropertyDescriptor(Node.prototype, 'parentElement')!.get!
         while (element !== null) {
-          const id = element.getAttribute('data-canvas-id')?.trim() || element.getAttribute('id')
+          const id = Element.prototype.getAttribute.call(element, 'data-canvas-id')?.trim() || Element.prototype.getAttribute.call(element, 'id')
           if (id && source.targets.has(id)) return id
-          element = element.parentElement
+          element = parentOf.call(element) as Element | null
         }
         return undefined
       },

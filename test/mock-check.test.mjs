@@ -353,3 +353,14 @@ test('mXSS form mutation opens no TCP connections in preview or capture and chec
   assert.match(checked.text, /警告/u)
   assert.doesNotMatch(checked.text, /未出图/u)
 })
+
+test('DOM-clobbering names cannot suppress mock inspection or the check screenshot', { skip }, async t => {
+  const source = html('<img name="defaultView" alt=""><img name="elementFromPoint" alt=""><img name="body" alt=""><button id="submit">Continue</button>')
+  const headless = new HeadlessBrowser()
+  t.after(() => headless.dispose())
+  const { run } = harness({ source, browser: location, headless })
+  const checked = await run()
+  t.diagnostic(checked.text)
+  assert.ok(checked.image)
+  assert.doesNotMatch(checked.text, /未出图/u)
+})
