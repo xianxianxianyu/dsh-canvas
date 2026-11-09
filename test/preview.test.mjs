@@ -52,19 +52,19 @@ const bundle = (await build({
 })).outputFiles[0].text
 
 /**
- * Run `work` on a fresh page with the preview of SOURCE in a 700×600 pane. The page is
- * `about:blank`, which is not a secure context, like DSH web served over plain http on a LAN
- * address. Uncaught page errors fail the test.
+ * Run `work` on a fresh page with the preview of SOURCE in a pane of `size` (700×600 unless
+ * given). The page is `about:blank`, which is not a secure context, like DSH web served over
+ * plain http on a LAN address. Uncaught page errors fail the test.
  */
-async function withPreview(work) {
+async function withPreview(work, size = { width: 700, height: 600 }) {
   const headless = new HeadlessBrowser()
   try {
     await headless.use(location.path, async browser => {
-      const page = await browser.newPage({ viewport: { width: 900, height: 700 } })
+      const page = await browser.newPage({ viewport: { width: 900, height: 900 } })
       page.setDefaultTimeout(5000)
       const errors = []
       page.on('pageerror', error => { errors.push(error.message) })
-      await page.setContent('<!doctype html><html><body style="margin:0"><div id="root" style="width:700px;height:600px"></div></body></html>')
+      await page.setContent(`<!doctype html><html><body style="margin:0"><div id="root" style="width:${size.width}px;height:${size.height}px"></div></body></html>`)
       await page.addScriptTag({ content: bundle })
       await page.evaluate(source => { window.show(source) }, SOURCE)
       await page.waitForSelector('[data-canvas-diagram] iframe')
@@ -75,6 +75,8 @@ async function withPreview(work) {
     await headless.dispose()
   }
 }
+
+const overlap = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
 
 /** Comment mode on, click `node`, type `text`, Enter; resolves once its pin shows. */
 async function comment(page, node, text) {
@@ -155,8 +157,33 @@ test('with the list open, the comment-mode hint stays clear of the zoom controls
         toolbar: rect(pane.querySelector('button[aria-label="批注"]').parentElement),
       }
     })
-    const overlap = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
     assert.equal(overlap(boxes.hint, boxes.zoom), false, `hint ${JSON.stringify(boxes.hint)} overlaps zoom ${JSON.stringify(boxes.zoom)}`)
     assert.equal(overlap(boxes.hint, boxes.toolbar), false, `hint ${JSON.stringify(boxes.hint)} overlaps the toolbar ${JSON.stringify(boxes.toolbar)}`)
   })
+})
+
+test('in a narrow sidebar the comment list opens as a drawer and the drawing keeps its size', { skip }, async () => {
+  await withPreview(async page => {
+    const measure = () => page.evaluate(() => {
+      const rect = element => { const { left, top, right, bottom, width, height } = element.getBoundingClientRect(); return { left, top, right, bottom, width, height } }
+      const pane = document.querySelector('[data-canvas-diagram]')
+      const list = document.querySelector('[data-canvas-comments]')
+      return {
+        tab: rect(document.getElementById('root')), pane: rect(pane), drawing: rect(pane.querySelector('iframe')),
+        list: list && rect(list), zoom: rect(pane.querySelector('button[aria-label="放大"]').parentElement),
+      }
+    })
+    const closed = await measure()
+    await page.getByRole('button', { name: '批注列表', exact: true }).click()
+    const open = await measure()
+    assert.equal(open.pane.width, open.tab.width, `the drawing pane keeps the whole ${open.tab.width} px width (got ${open.pane.width})`)
+    assert.ok(open.drawing.width >= closed.drawing.width * 0.99, `the drawing is ${open.drawing.width} px wide with the list open, ${closed.drawing.width} px with it closed`)
+    assert.equal(open.list.width, open.tab.width, 'the drawer spans the bottom of the tab')
+    assert.ok(open.list.height <= open.tab.height / 2, `the drawer takes ${open.list.height} of ${open.tab.height} px`)
+    assert.equal(overlap(open.drawing, open.list), false, `drawing ${JSON.stringify(open.drawing)} is under the drawer ${JSON.stringify(open.list)}`)
+    assert.equal(overlap(open.zoom, open.list), false, `zoom ${JSON.stringify(open.zoom)} is under the drawer ${JSON.stringify(open.list)}`)
+
+    await page.getByRole('button', { name: '关闭批注列表', exact: true }).click()
+    assert.equal(await page.locator('[data-canvas-comments]').count(), 0, '✕ closes the drawer')
+  }, { width: 420, height: 800 })
 })

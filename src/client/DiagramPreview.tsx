@@ -74,11 +74,14 @@ const MIN_SCALE = 0.05
 const MAX_SCALE = 8
 /** A press that moves less than this is a click (picks a node in comment mode), more is a pan. */
 const CLICK_SLOP = 5
+/** Below this tab width the comment list is a drawer over the bottom of the drawing, not a column beside it. */
+const NARROW = 640
 
-/** Centered, shrunk to fit the pane, never enlarged. */
-function fitted(box: { readonly width: number; readonly height: number }, page: Page): View {
-  const scale = Math.max(MIN_SCALE, Math.min(1, (box.width - 2 * MARGIN) / page.width, (box.height - 2 * MARGIN) / page.height))
-  return { scale, x: (box.width - page.width * scale) / 2, y: Math.max(MARGIN, (box.height - page.height * scale) / 2) }
+/** Centered in the pane above `bottom` (the open drawer), shrunk to fit, never enlarged. */
+function fitted(box: { readonly width: number; readonly height: number }, page: Page, bottom: number): View {
+  const height = box.height - bottom
+  const scale = Math.max(MIN_SCALE, Math.min(1, (box.width - 2 * MARGIN) / page.width, (height - 2 * MARGIN) / page.height))
+  return { scale, x: (box.width - page.width * scale) / 2, y: Math.max(MARGIN, (height - page.height * scale) / 2) }
 }
 
 /** A node box (SVG pixels) on screen, in pane pixels. */
@@ -114,8 +117,10 @@ function Viewport({ address, page, scheme, nodes, threads, comments, t }: {
   readonly comments: CommentsHandle
   readonly t: DocumentBodyProps['t']
 }): ReactNode {
+  const outer = useRef<HTMLDivElement>(null)
   const pane = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ width: 0, height: 0 })
+  const [tab, setTab] = useState({ width: 0, height: 0 })
   // `undefined` follows the pane: the chart refits on resize and on every redraw.
   const [manual, setManual] = useTabState<View | undefined>(address, 'view', undefined)
   const press = useRef<{ readonly pointer: number; readonly x: number; readonly y: number; readonly from: View; readonly manual: View | undefined; readonly node: string | undefined } | undefined>(undefined)
@@ -126,16 +131,20 @@ function Viewport({ address, page, scheme, nodes, threads, comments, t }: {
   const [filter, setFilter] = useTabState<StatusFilter>(address, 'filter', { open: true, addressed: true, resolved: false })
   const [focused, setFocused] = useTabState<string | undefined>(address, 'focused', undefined)
   const [hovered, setHovered] = useState<string>()
-  const view = manual ?? fitted(box, page)
+  // In a narrow tab a 300 px column would leave the drawing a sliver; the list covers the bottom instead and the drawing fits above it.
+  const drawer = listOpen && tab.width < NARROW ? Math.round(Math.min(tab.height * 0.45, 380)) : 0
+  const view = manual ?? fitted(box, page, drawer)
   const latest = useRef(view)
   latest.current = view
   const red = THEMES[scheme].comment
 
   useLayoutEffect(() => {
-    const element = pane.current!
-    const observer = new ResizeObserver(() => { setBox({ width: element.clientWidth, height: element.clientHeight }) })
-    observer.observe(element)
-    return () => { observer.disconnect() }
+    const observers = ([[pane.current!, setBox], [outer.current!, setTab]] as const).map(([element, set]) => {
+      const observer = new ResizeObserver(() => { set({ width: element.clientWidth, height: element.clientHeight }) })
+      observer.observe(element)
+      return observer
+    })
+    return () => { for (const observer of observers) observer.disconnect() }
   }, [])
 
   // Reads only refs and the state setter, so the wheel listener below may keep the first copy.
@@ -230,7 +239,7 @@ function Viewport({ address, page, scheme, nodes, threads, comments, t }: {
     background: 'color-mix(in srgb, currentColor 8%, transparent)', backdropFilter: 'blur(6px)',
   }
   const draftAt = draft === undefined || !draft.node.boxes.length ? undefined : onScreen(view, draft.node.boxes[0]!)
-  return <div style={{ display: 'flex', width: '100%', height: '100%', minHeight: 240 }}>
+  return <div ref={outer} style={{ position: 'relative', display: 'flex', width: '100%', height: '100%', minHeight: 240 }}>
     <div ref={pane} data-canvas-diagram data-canvas-commenting={commenting || undefined} tabIndex={0}
       onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { press.current = undefined }}
       onKeyDown={onKeyDown}
@@ -278,7 +287,7 @@ function Viewport({ address, page, scheme, nodes, threads, comments, t }: {
         }}>{here.length}</button>)}
       {draft !== undefined && <form data-canvas-draft data-canvas-ui onSubmit={event => { event.preventDefault(); void submit() }} style={{
         position: 'absolute', zIndex: 2, width: 260, padding: 8, borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 6,
-        left: Math.max(8, Math.min((draftAt?.left ?? 8), box.width - 268)), top: Math.max(8, Math.min((draftAt?.bottom ?? 8) + 8, box.height - 140)),
+        left: Math.max(8, Math.min((draftAt?.left ?? 8), box.width - 268)), top: Math.max(8, Math.min((draftAt?.bottom ?? 8) + 8, box.height - drawer - 140)),
         background: 'Canvas', color: 'CanvasText', boxShadow: '0 4px 16px rgba(0,0,0,.3)', border: '1px solid color-mix(in srgb, currentColor 20%, transparent)',
       }}>
         <div style={{ fontSize: 12, fontWeight: 600 }}>{t('comment.draftTitle', { label: draft.node.label || draft.node.id })}</div>
@@ -316,14 +325,14 @@ function Viewport({ address, page, scheme, nodes, threads, comments, t }: {
         {commenting && <div data-canvas-ui role="status" style={{ ...bar, position: 'static', pointerEvents: 'auto', padding: '4px 10px', fontSize: 12 }}>{t('comment.modeHint')}</div>}
         {comments.state.status === 'failed' && <div data-canvas-ui role="alert" style={{ ...bar, position: 'static', pointerEvents: 'auto', padding: '4px 10px', fontSize: 12, color: red }}>{t('comment.unavailable', { error: comments.state.error })}</div>}
       </div>
-      <div data-canvas-ui style={{ ...bar, right: 8, bottom: 8 }}>
+      <div data-canvas-ui style={{ ...bar, right: 8, bottom: 8 + drawer }}>
         <button type="button" style={button} title={t('zoomOut')} aria-label={t('zoomOut')} onClick={() => { center(1 / 1.25) }}>−</button>
         <button type="button" style={button} title={t('actual')} aria-label={t('actual')} onClick={() => { center(1 / view.scale) }}>{Math.round(view.scale * 100)}%</button>
         <button type="button" style={button} title={t('zoomIn')} aria-label={t('zoomIn')} onClick={() => { center(1.25) }}>+</button>
         <button type="button" style={button} title={t('fit')} aria-label={t('fit')} onClick={() => { setManual(undefined) }}>⤢</button>
       </div>
     </div>
-    {listOpen && <CommentList threads={threads} filter={filter} onFilter={setFilter} focused={focused} open={red} error={comments.saveError} t={t}
+    {listOpen && <CommentList threads={threads} filter={filter} onFilter={setFilter} focused={focused} open={red} error={comments.saveError} t={t} drawer={drawer || undefined}
       apply={comments.apply} onClose={() => { setListOpen(false) }} onFocus={thread => { setFocused(thread.root.id) }} />}
   </div>
 }

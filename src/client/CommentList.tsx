@@ -77,8 +77,10 @@ function ThreadItem({ thread, focused, open, t, apply, onFocus }: {
 
 /**
  * The side list: threads filtered by status, each with its replies, drift warning and actions.
+ * Beside the drawing it is a 300 px column; with `drawer` (a height) it covers the bottom of a
+ * narrow tab instead, so the drawing keeps the whole width.
  */
-export function CommentList({ threads, filter, onFilter, focused, onFocus, open, error, t, apply, onClose }: {
+export function CommentList({ threads, filter, onFilter, focused, onFocus, open, error, t, apply, onClose, drawer }: {
   readonly threads: readonly Thread[]
   readonly filter: StatusFilter
   readonly onFilter: (filter: StatusFilter) => void
@@ -89,11 +91,17 @@ export function CommentList({ threads, filter, onFilter, focused, onFocus, open,
   readonly t: DocumentBodyProps['t']
   readonly apply: (ops: readonly UserOp[]) => Promise<boolean>
   readonly onClose: () => void
+  readonly drawer?: number | undefined
 }): ReactNode {
   const visible = threads.filter(thread => filter[thread.root.status])
-  return <aside data-canvas-comments aria-label={t('comment.list')} style={{
-    width: 300, maxWidth: '55%', flex: 'none', display: 'flex', flexDirection: 'column', minHeight: 0,
-    borderLeft: '1px solid color-mix(in srgb, currentColor 15%, transparent)', fontSize: 13,
+  const place: CSSProperties = drawer === undefined
+    ? { width: 300, maxWidth: '55%', flex: 'none', borderLeft: '1px solid color-mix(in srgb, currentColor 15%, transparent)' }
+    : {
+      position: 'absolute', left: 0, right: 0, bottom: 0, height: drawer, zIndex: 3, background: 'Canvas', color: 'CanvasText',
+      borderTop: '1px solid color-mix(in srgb, currentColor 20%, transparent)', boxShadow: '0 -4px 16px rgba(0,0,0,.18)',
+    }
+  return <aside data-canvas-comments data-canvas-drawer={drawer === undefined ? undefined : true} aria-label={t('comment.list')} style={{
+    ...place, display: 'flex', flexDirection: 'column', minHeight: 0, fontSize: 13,
   }}>
     <header style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 8px 8px 12px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' }}>
       <div role="group" aria-label={t('comment.filter')} style={{ display: 'flex', gap: 4, flex: 1, flexWrap: 'wrap' }}>
