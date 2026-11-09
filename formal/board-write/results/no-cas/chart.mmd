@@ -1,0 +1,317 @@
+---
+title: "Saving a board and noticing overwritten changes"
+---
+stateDiagram-v2
+  state "Legend" as legend {
+    lg0: saved
+    lg1: refused
+    lg2: working
+    lg3: Breaks NeverWritesOverInvalid or NoLostAcknowledgedChange or NoLostAgentChange
+    lg4: Path to the NeverWritesOverInvalid or NoLostAcknowledgedChange or NoLostAgentChange bug
+  }
+  class lg0 teal
+  class lg1 orange
+  class lg2 blue
+  class lg3 breaks
+  class lg4 bugPath
+  state "YourSave Ready to save your note" as s0 {
+    s1: Agent Agent will read
+    s2: Agent Agent write succeeded#59; records its version
+    s3: Agent Agent finished
+    s4: Agent Agent is reading
+    s5: Agent Agent records the read version
+    s6: Agent Agent can edit
+  }
+  state "YourSave Checking the file version" as s7 {
+    s8: Agent Agent will read
+    s9: Agent Agent write succeeded#59; records its version
+    s10: Agent Agent finished
+    s11: Agent Agent is reading
+    s12: Agent Agent records the read version
+    s13: Agent Agent can edit
+  }
+  state "YourSave Board not found" as s14 {
+    s15: Agent Agent will read
+    s16: Agent Agent finished
+  }
+  state "YourSave Reading the board" as s17 {
+    s18: Agent Agent will read
+    s19: Agent Agent write succeeded#59; records its version
+    s20: Agent Agent is reading
+    s21: Agent Agent finished
+    s22: Agent Agent records the read version
+    s23: Agent Agent can edit
+  }
+  state "YourSave Checking and applying your note" as s24 {
+    s25: Agent Agent will read
+    s26: Agent Agent write succeeded#59; records its version
+    s27: Agent Agent is reading
+    s28: Agent Agent finished
+    s29: Agent Agent records the read version
+    s30: Agent Agent can edit
+  }
+  state "YourSave Invalid board#59; nothing overwritten" as s31 {
+    s32: Agent Agent will read
+    s33: Agent Agent write succeeded#59; records its version
+    s34: Agent Agent is reading
+    s35: Agent Agent finished
+    s36: Agent Agent records the read version
+    s37: Agent Agent can edit
+  }
+  state "YourSave Ready to publish your note" as s38 {
+    s39: Agent Agent will read
+    s40: Agent Agent write succeeded#59; records its version
+    s41: Agent Agent is reading
+    s42: Agent Agent finished
+    s43: Agent Agent records the read version
+    s44: Agent Agent can edit
+  }
+  state "YourSave Your note is saved#59; remembering intent" as s45 {
+    s46: Agent Agent will read
+    s47: Agent Agent write succeeded#59; records its version
+    s48: Agent Agent is reading
+    s49: Agent Agent finished
+    s50: Agent Agent records the read version
+    s51: Agent Agent can edit
+  }
+  state "YourSave Invalid board overwritten" as s52 {
+    s53: Agent Agent write succeeded#59; records its version
+  }
+  state "YourSave Your save is complete#59; reply pending" as s54 {
+    s55: Agent Agent will read
+    s56: Agent Agent write succeeded#59; records its version
+    s57: Agent Agent is reading
+    s58: Agent Agent finished
+    s59: Agent Agent records the read version
+    s60: Agent Agent can edit
+  }
+  state "YourSave Agent acknowledged work lost" as s61 {
+    s62: Agent Agent finished
+  }
+  state "YourSave Agent acknowledged work lost / Invalid board overwritten" as s63 {
+    s64: Agent Agent finished
+  }
+  state "YourSave You were told it is saved" as s65 {
+    s66: Agent Agent will read
+    s67: Agent Agent write succeeded#59; records its version
+    s68: Agent Agent is reading
+    s69: Agent Agent finished
+    s70: Agent Agent records the read version
+    s71: Agent Agent can edit
+  }
+  state "YourSave Reply lost#59; you can resend" as s72 {
+    s73: Agent Agent will read
+    s74: Agent Agent write succeeded#59; records its version
+    s75: Agent Agent is reading
+    s76: Agent Agent finished
+    s77: Agent Agent records the read version
+    s78: Agent Agent can edit
+  }
+  [*] --> s1
+  s1 --> s3: the agent checks the version
+  s1 --> s8: you save a note
+  s1 --> s2: a bare edit transforms current text under the lock
+  s1 --> s4: the agent checks the version
+  s2 --> s3: the agent receives success
+  s2 --> s9: you save a note
+  s3 --> s10: you save a note
+  s4 --> s5: the agent reads the text
+  s4 --> s11: you save a note
+  s8 --> s15: the file is absent
+  s8 --> s10: the agent checks the version
+  s8 --> s18: the file is found
+  s8 --> s9: a bare edit transforms current text under the lock
+  s8 --> s11: the agent checks the version
+  s5 --> s6: the agent remembers that read version
+  s5 --> s12: you save a note
+  s15 --> s16: the agent checks the version
+  s18 --> s25: the text is read
+  s18 --> s19: a bare edit transforms current text under the lock
+  s18 --> s20: the agent checks the version
+  s9 --> s19: the file is found
+  s9 --> s10: the agent receives success
+  s10 --> s16: the file is absent
+  s11 --> s20: the file is found
+  s11 --> s12: the agent reads the text
+  s25 --> s26: a bare edit transforms current text under the lock
+  s25 --> s27: the agent checks the version
+  s25 --> s32: invalid JSON is refused
+  s25 --> s39: your absolute operation is applied
+  s6 --> s2: the agent attempts its write or matching hunk edit
+  s6 --> s13: you save a note
+  s19 --> s26: the text is read
+  s19 --> s21: the agent receives success
+  s20 --> s27: the text is read
+  s20 --> s22: the agent reads the text
+  s10 --> s21: the file is found
+  s12 --> s22: the file is found
+  s12 --> s13: the agent remembers that read version
+  s26 --> s28: the agent receives success
+  s26 --> s33: invalid JSON is refused
+  s27 --> s29: the agent reads the text
+  s27 --> s34: invalid JSON is refused
+  s32 --> s33: a bare edit transforms current text under the lock
+  s32 --> s34: the agent checks the version
+  s26 --> s40: your absolute operation is applied
+  s27 --> s41: your absolute operation is applied
+  s21 --> s28: the text is read
+  s22 --> s29: the text is read
+  s22 --> s23: the agent remembers that read version
+  s13 --> s23: the file is found
+  s13 --> s9: the agent attempts its write or matching hunk edit
+  s39 --> s46: the version is checked under the file lock
+  s39 --> s40: a bare edit transforms current text under the lock
+  s39 --> s41: the agent checks the version
+  s28 --> s35: invalid JSON is refused
+  s29 --> s30: the agent remembers that read version
+  s29 --> s36: invalid JSON is refused
+  s33 --> s35: the agent receives success
+  s34 --> s36: the agent reads the text
+  s28 --> s42: your absolute operation is applied
+  s29 --> s43: your absolute operation is applied
+  s46 --> s47: a bare edit transforms current text under the lock
+  s46 --> s48: the agent checks the version
+  s46 --> s55: the host retains applied intent before replying
+  s23 --> s30: the text is read
+  s23 --> s19: the agent attempts its write or matching hunk edit
+  s40 --> s47: the version is checked under the file lock
+  s40 --> s42: the agent receives success
+  s40 --> s53: the version is checked under the file lock
+  s41 --> s48: the version is checked under the file lock
+  s41 --> s43: the agent reads the text
+  s30 --> s26: the agent attempts its write or matching hunk edit
+  s30 --> s37: invalid JSON is refused
+  s36 --> s37: the agent remembers that read version
+  s30 --> s44: your absolute operation is applied
+  s47 --> s49: the agent receives success
+  s47 --> s56: the host retains applied intent before replying
+  s48 --> s50: the agent reads the text
+  s48 --> s57: the host retains applied intent before replying
+  s47 --> s62: the agent receives success
+  s53 --> s64: the agent receives success
+  s42 --> s49: the version is checked under the file lock
+  s42 --> s64: the version is checked under the file lock
+  s42 --> s62: the version is checked under the file lock
+  s43 --> s50: the version is checked under the file lock
+  s43 --> s44: the agent remembers that read version
+  s55 --> s66: you receive done
+  s55 --> s56: a bare edit transforms current text under the lock
+  s55 --> s57: the agent checks the version
+  s55 --> s73: the reply is lost
+  s37 --> s33: the agent attempts its write or matching hunk edit
+  s49 --> s58: the host retains applied intent before replying
+  s50 --> s51: the agent remembers that read version
+  s50 --> s59: the host retains applied intent before replying
+  s44 --> s51: the version is checked under the file lock
+  s44 --> s40: the agent attempts its write or matching hunk edit
+  s66 --> s67: a bare edit transforms current text under the lock
+  s66 --> s68: the agent checks the version
+  s56 --> s67: you receive done
+  s56 --> s58: the agent receives success
+  s56 --> s74: the reply is lost
+  s57 --> s68: you receive done
+  s57 --> s59: the agent reads the text
+  s57 --> s75: the reply is lost
+  s56 --> s62: the agent receives success
+  s73 --> s74: a bare edit transforms current text under the lock
+  s73 --> s75: the agent checks the version
+  s51 --> s46: the agent attempts its write or matching hunk edit
+  s51 --> s60: the host retains applied intent before replying
+  s51 --> s47: the agent attempts its write or matching hunk edit
+  s67 --> s69: the agent receives success
+  s68 --> s70: the agent reads the text
+  s67 --> s62: the agent receives success
+  s58 --> s69: you receive done
+  s58 --> s76: the reply is lost
+  s59 --> s70: you receive done
+  s59 --> s60: the agent remembers that read version
+  s59 --> s77: the reply is lost
+  s74 --> s76: the agent receives success
+  s75 --> s77: the agent reads the text
+  s74 --> s62: the agent receives success
+  s70 --> s71: the agent remembers that read version
+  s60 --> s71: you receive done
+  s60 --> s55: the agent attempts its write or matching hunk edit
+  s60 --> s78: the reply is lost
+  s60 --> s56: the agent attempts its write or matching hunk edit
+  s77 --> s78: the agent remembers that read version
+  s71 --> s66: the agent attempts its write or matching hunk edit
+  s71 --> s67: the agent attempts its write or matching hunk edit
+  s78 --> s73: the agent attempts its write or matching hunk edit
+  s78 --> s74: the agent attempts its write or matching hunk edit
+  classDef breaks fill:#ffecee,stroke:#e72e3b,stroke-width:2.5px,color:#cd2834
+  class s1 blue
+  class s1 bugPath
+  class s2 blue
+  class s3 blue
+  class s4 blue
+  class s5 blue
+  class s6 blue
+  class s8 blue
+  class s8 bugPath
+  class s9 blue
+  class s10 blue
+  class s11 blue
+  class s12 blue
+  class s13 blue
+  class s15 orange
+  class s16 orange
+  class s18 blue
+  class s18 bugPath
+  class s19 blue
+  class s20 blue
+  class s21 blue
+  class s22 blue
+  class s23 blue
+  class s25 blue
+  class s25 bugPath
+  class s26 blue
+  class s26 bugPath
+  class s27 blue
+  class s28 blue
+  class s28 bugPath
+  class s29 blue
+  class s30 blue
+  class s32 orange
+  class s33 orange
+  class s34 orange
+  class s35 orange
+  class s36 orange
+  class s37 orange
+  class s39 blue
+  class s40 blue
+  class s40 bugPath
+  class s41 blue
+  class s42 blue
+  class s42 bugPath
+  class s43 blue
+  class s44 blue
+  class s46 blue
+  class s47 blue
+  class s48 blue
+  class s49 blue
+  class s50 blue
+  class s51 blue
+  class s53 breaks
+  class s53 bugPath
+  class s55 blue
+  class s56 blue
+  class s57 blue
+  class s58 blue
+  class s59 blue
+  class s60 blue
+  class s62 breaks
+  class s64 breaks
+  class s64 bugPath
+  class s66 teal
+  class s67 teal
+  class s68 teal
+  class s69 teal
+  class s70 teal
+  class s71 teal
+  class s73 orange
+  class s74 orange
+  class s75 orange
+  class s76 orange
+  class s77 orange
+  class s78 orange

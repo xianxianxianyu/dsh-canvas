@@ -1,0 +1,80 @@
+---
+title: "Saving a board and noticing overwritten changes"
+---
+stateDiagram-v2
+  direction LR
+  state "Legend" as legend {
+    lg0: saved
+    lg1: working
+    lg2: Breaks NoLostAcknowledgedChange
+    lg3: Path to the NoLostAcknowledgedChange bug
+  }
+  class lg0 teal
+  class lg1 blue
+  class lg2 breaks
+  class lg3 bugPath
+  state "At the same time" as all {
+    state "YourSave" as r0 {
+      s0: Ready to save your note
+      s1: Checking the file version
+      s2: Reading the board
+      s3: Checking and applying your note
+      s4: Ready to publish your note
+      s5: Your note is saved#59; remembering intent
+      s6: Your save is complete#59; reply pending
+      s7: You were told it is saved
+      s8: Person change absent#59; invalid source is visible
+      [*] --> s0
+      s0 --> s1: you save a note
+      s1 --> s2: the file is found
+      s2 --> s3: the text is read
+      s3 --> s4: your absolute operation is applied
+      s4 --> s5: the version is checked under the file lock [when Agent records the read version]
+      s5 --> s6: the host retains applied intent before replying
+      s6 --> s7: you receive done
+      s7 --> s8: the agent attempts its write or matching hunk edit [when Agent can edit]
+    }
+    --
+    state "Agent" as r1 {
+      s9: Agent will read
+      s10: Agent is reading
+      s11: Agent records the read version
+      s12: Agent can edit
+      s13: Agent write succeeded#59; records its version
+      [*] --> s9
+      s9 --> s10: the agent checks the version [when Ready to publish your note]
+      s10 --> s11: the agent reads the text
+      s11 --> s12: the agent remembers that read version [when You were told it is saved]
+      s12 --> s13: the agent attempts its write or matching hunk edit
+    }
+  }
+  classDef breaks fill:#ffecee,stroke:#e72e3b,stroke-width:2.5px,color:#cd2834
+  class s0 blue
+  class s0 bugPath
+  class s1 blue
+  class s1 bugPath
+  class s2 blue
+  class s2 bugPath
+  class s3 blue
+  class s3 bugPath
+  class s4 blue
+  class s4 bugPath
+  class s5 blue
+  class s5 bugPath
+  class s6 blue
+  class s6 bugPath
+  class s7 teal
+  class s7 bugPath
+  class s8 teal
+  class s8 breaks
+  class s8 bugPath
+  class s9 blue
+  class s9 bugPath
+  class s10 blue
+  class s10 bugPath
+  class s11 bugPath
+  class s12 teal
+  class s12 bugPath
+  class s13 teal
+  class s13 breaks
+  class s13 bugPath

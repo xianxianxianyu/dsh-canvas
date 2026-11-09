@@ -1,0 +1,144 @@
+[
+  {
+    "case": "full",
+    "states": "10,268",
+    "broken": [],
+    "held": [
+      "TypeOK",
+      "NoLostAcknowledgedChange",
+      "NoLostAgentChange",
+      "NoSilentLoss",
+      "NeverWritesOverInvalid",
+      "ReplaySafe",
+      "RoundsBounded",
+      "NoDeadlock",
+      "RouteTerminates",
+      "RecoveryEventually"
+    ]
+  },
+  {
+    "case": "policy-off",
+    "states": "22,099",
+    "broken": [
+      "NoLostAcknowledgedChange"
+    ],
+    "held": [
+      "TypeOK",
+      "NoLostAgentChange",
+      "NoSilentLoss",
+      "NeverWritesOverInvalid",
+      "ReplaySafe",
+      "RoundsBounded",
+      "NoDeadlock",
+      "RouteTerminates",
+      "RecoveryEventually"
+    ]
+  },
+  {
+    "case": "no-cas",
+    "states": "284",
+    "broken": [
+      "NeverWritesOverInvalid",
+      "NoLostAcknowledgedChange",
+      "NoLostAgentChange"
+    ],
+    "held": [
+      "TypeOK",
+      "NoSilentLoss",
+      "ReplaySafe",
+      "RoundsBounded",
+      "NoDeadlock",
+      "RouteTerminates",
+      "RecoveryEventually"
+    ]
+  },
+  {
+    "case": "refresh-observation",
+    "states": "360",
+    "broken": [
+      "NoLostAcknowledgedChange"
+    ],
+    "held": [
+      "TypeOK",
+      "NoLostAgentChange",
+      "NoSilentLoss",
+      "NeverWritesOverInvalid",
+      "ReplaySafe",
+      "RoundsBounded",
+      "NoDeadlock",
+      "RouteTerminates",
+      "RecoveryEventually"
+    ]
+  },
+  {
+    "case": "skip-validity",
+    "states": "462",
+    "broken": [
+      "NeverWritesOverInvalid"
+    ],
+    "held": [
+      "TypeOK",
+      "NoLostAcknowledgedChange",
+      "NoLostAgentChange",
+      "NoSilentLoss",
+      "ReplaySafe",
+      "RoundsBounded",
+      "NoDeadlock",
+      "RouteTerminates",
+      "RecoveryEventually"
+    ]
+  },
+  {
+    "case": "replay-writes",
+    "states": "35",
+    "broken": [
+      "ReplaySafe"
+    ],
+    "held": [
+      "TypeOK",
+      "NoLostAcknowledgedChange",
+      "NoLostAgentChange",
+      "NoSilentLoss",
+      "NeverWritesOverInvalid",
+      "RoundsBounded",
+      "NoDeadlock",
+      "RouteTerminates",
+      "RecoveryEventually"
+    ]
+  },
+  {
+    "case": "no-journal",
+    "states": "242",
+    "broken": [
+      "NoLostAcknowledgedChange",
+      "NoSilentLoss",
+      "RecoveryEventually"
+    ],
+    "held": [
+      "TypeOK",
+      "NoLostAgentChange",
+      "NeverWritesOverInvalid",
+      "ReplaySafe",
+      "RoundsBounded",
+      "NoDeadlock",
+      "RouteTerminates"
+    ]
+  },
+  {
+    "case": "chart",
+    "states": "33",
+    "broken": [],
+    "held": [
+      "TypeOK",
+      "NoLostAcknowledgedChange",
+      "NoLostAgentChange",
+      "NoSilentLoss",
+      "NeverWritesOverInvalid",
+      "ReplaySafe",
+      "RoundsBounded",
+      "NoDeadlock",
+      "RouteTerminates",
+      "RecoveryEventually"
+    ]
+  }
+]

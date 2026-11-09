@@ -1,0 +1,72 @@
+[
+  {
+    "scenario": "current",
+    "result": "done",
+    "facts": [
+      "agent",
+      "person"
+    ]
+  },
+  {
+    "scenario": "no-CAS scratch mutant",
+    "result": "done",
+    "facts": [
+      "person"
+    ]
+  },
+  {
+    "scenario": "current observation isolation",
+    "facts": [
+      "person"
+    ]
+  },
+  {
+    "scenario": "refresh-observation seam mutant",
+    "facts": [
+      "agent"
+    ]
+  },
+  {
+    "scenario": "current invalid guard",
+    "result": "invalid-source",
+    "writes": 0
+  },
+  {
+    "scenario": "skip-validity scratch mutant",
+    "result": "done",
+    "writes": 1
+  },
+  {
+    "scenario": "resend after lost reply",
+    "result": "same bytes, version and write count"
+  },
+  {
+    "scenario": "no-change guard scratch mutant",
+    "result": "resend changes version"
+  },
+  {
+    "scenario": "policy-off detection and reapply",
+    "detectedBatches": 1,
+    "facts": [
+      "agent",
+      "person"
+    ]
+  },
+  {
+    "scenario": "no-journal scratch mutant",
+    "detectedBatches": 0,
+    "facts": [
+      "agent"
+    ]
+  },
+  {
+    "scenario": "busy then resend",
+    "rounds": 3,
+    "facts": [
+      "agent-1",
+      "agent-2",
+      "agent-3",
+      "person"
+    ]
+  }
+]

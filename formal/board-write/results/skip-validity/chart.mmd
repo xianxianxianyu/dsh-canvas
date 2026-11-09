@@ -1,0 +1,84 @@
+---
+title: "Saving a board and noticing overwritten changes"
+---
+stateDiagram-v2
+  direction LR
+  state "Legend" as legend {
+    lg0: saved
+    lg1: refused
+    lg2: working
+    lg3: Breaks NeverWritesOverInvalid
+    lg4: Path to the NeverWritesOverInvalid bug
+  }
+  class lg0 teal
+  class lg1 orange
+  class lg2 blue
+  class lg3 breaks
+  class lg4 bugPath
+  state "At the same time" as all {
+    state "YourSave" as r0 {
+      s0: Ready to save your note
+      s1: Checking the file version
+      s2: Board not found
+      s3: Reading the board
+      s4: Checking and applying your note
+      s5: Ready to publish your note
+      s6: Invalid board overwritten
+      s7: Your note is saved#59; remembering intent
+      s8: Another writer got there first
+      s9: Your save is complete#59; reply pending
+      s10: You were told it is saved
+      s11: Reply lost#59; you can resend
+      [*] --> s0
+      s0 --> s1: you save a note
+      s1 --> s2: the file is absent [when Agent finished or Agent will read]
+      s1 --> s3: the file is found
+      s3 --> s4: the text is read
+      s4 --> s5: your absolute operation is applied
+      s5 --> s6: the version is checked under the file lock
+      s5 --> s7: the version is checked under the file lock
+      s5 --> s8: the version changed#59; write refused [when Agent finished or Agent write succeeded#59; records its version]
+      s7 --> s9: the host retains applied intent before replying
+      s8 --> s1: the route tries again
+      s9 --> s10: you receive done
+      s9 --> s11: the reply is lost
+    }
+    --
+    state "Agent" as r1 {
+      s12: Agent will read
+      s13: Agent write succeeded#59; records its version
+      s14: Agent finished
+      s15: Agent is reading
+      s16: Agent records the read version
+      s17: Agent can edit
+      [*] --> s12
+      s12 --> s14: the agent checks the version [when Board not found or Checking the file version or Ready to save your note]
+      s12 --> s13: a bare edit transforms current text under the lock [unless Board not found]
+      s12 --> s15: the agent checks the version [unless Board not found]
+      s13 --> s14: the agent receives success
+      s15 --> s16: the agent reads the text
+      s16 --> s17: the agent remembers that read version
+      s17 --> s13: the agent attempts its write or matching hunk edit
+      s17 --> s12: the agent attempts its write or matching hunk edit [when Invalid board overwritten or Reply lost#59; you can resend or You were told it is saved or Your note is saved#59; remembering intent or Your save is complete#59; reply pending]
+    }
+  }
+  classDef breaks fill:#ffecee,stroke:#e72e3b,stroke-width:2.5px,color:#cd2834
+  class s0 blue
+  class s0 bugPath
+  class s1 blue
+  class s1 bugPath
+  class s2 orange
+  class s3 blue
+  class s3 bugPath
+  class s4 blue
+  class s4 bugPath
+  class s5 blue
+  class s5 bugPath
+  class s6 breaks
+  class s6 bugPath
+  class s7 blue
+  class s8 blue
+  class s9 blue
+  class s10 teal
+  class s11 orange
+  class s12 bugPath
