@@ -5,9 +5,10 @@ import { homedir } from 'node:os'
 import test from 'node:test'
 import { HeadlessBrowser, browserCandidates, locateBrowser } from '../src/host/browser.ts'
 import { screenshot } from '../src/host/raster.ts'
+import { parseBoard, scene } from '../src/shared/board.ts'
 import { renderDiagram } from '../src/shared/diagram.ts'
 import { diagramNodes } from '../src/shared/nodes.ts'
-import { PAGE_PADDING, THEMES, pageHtml } from '../src/shared/page.ts'
+import { PAGE_PADDING, THEMES, boardPageHtml, pageHtml } from '../src/shared/page.ts'
 import { decodePng } from './png.mjs'
 
 const location = locateBrowser(undefined, browserCandidates(process.platform, process.env, homedir()), existsSync)
@@ -126,4 +127,38 @@ test('an outlined node shows a dashed frame in the comment color in the screensh
   })
   assert.equal(framed[0], 0, 'no frame without the option')
   assert.ok(framed[1] > s3.width * shots[1].scale * 0.3, `dashed frame present (${framed[1]} red pixels on one row above the node)`)
+})
+
+test('Chrome paints the board page: the embedded diagram keeps its statechart colors at its board position', { skip }, async () => {
+  const source = await readFile(new URL('fixtures/statechart.mmd', import.meta.url), 'utf8')
+  const diagram = renderDiagram(source)
+  const parsed = parseBoard(await readFile(new URL('fixtures/plan.canvas', import.meta.url), 'utf8'))
+  const layout = scene(parsed.board)
+  const page = boardPageHtml(layout, new Map([['flow', { kind: 'svg', markup: diagram.svg, width: diagram.width, height: diagram.height }]]), 'light')
+  const headless = new HeadlessBrowser()
+  let shot
+  try {
+    shot = await headless.use(location.path, browser => screenshot(browser, page, new AbortController().signal))
+  } finally {
+    await headless.dispose()
+  }
+  const png = decodePng(shot.png)
+  assert.deepEqual([png.width, png.height], [Math.round(page.width * shot.scale), Math.round(page.height * shot.scale)])
+  // Count the breaks fill (#ffecee, the s3 state) inside the flow node's box and nowhere else.
+  const flow = layout.nodes.find(entry => entry.id === 'flow').rect
+  let inside = 0
+  let outside = 0
+  for (let y = 0; y < png.height; y += 2) {
+    for (let x = 0; x < png.width; x += 2) {
+      if (png.rgb(x, y) !== THEMES.light.breaks.fill) continue
+      const [bx, by] = [x / shot.scale - PAGE_PADDING, y / shot.scale - PAGE_PADDING]
+      if (bx >= flow.x && bx <= flow.x + flow.width && by >= flow.y && by <= flow.y + flow.height) inside++
+      else outside++
+    }
+  }
+  assert.ok(inside > 50, `the embedded statechart's 支付失败 fill is drawn inside the flow box (${inside} samples)`)
+  assert.equal(outside, 0)
+  // The why note has color "4": its border is JSON Canvas green.
+  const why = layout.nodes.find(entry => entry.id === 'why').rect
+  assert.equal(png.rgb((PAGE_PADDING + why.x + 1) * shot.scale, (PAGE_PADDING + why.y + why.height / 2) * shot.scale), '#44cf6e')
 })

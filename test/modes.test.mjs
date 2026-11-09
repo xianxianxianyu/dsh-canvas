@@ -25,7 +25,8 @@ test('every mode has its skill file', () => {
 test('a file belongs to the mode of its suffix, ignoring case and directories', () => {
   assert.equal(modeOf('/tmp/x/chart.mmd'), 'diagram')
   assert.equal(modeOf('C:\\charts\\Flow.MERMAID'), 'diagram')
+  assert.equal(modeOf('design/Plan.Canvas'), 'board')
   assert.equal(modeOf('docs/chart.mmd.md'), undefined)
   assert.equal(modeOf('notes.md'), undefined)
-  assert.equal(SUFFIXES, '.mmd, .mermaid')
+  assert.equal(SUFFIXES, '.mmd, .mermaid, .canvas')
 })

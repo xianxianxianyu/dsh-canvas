@@ -2,10 +2,14 @@ import type { CommentStatus } from './comment-schema.ts'
 import { outlineTargets, type Drift, type Thread } from './comments.ts'
 import { MODES, type ModeId } from './modes.ts'
 
-/** One problem in a canvas file. Positions are 1-based; a problem without a position omits them. */
+/**
+ * One problem in a canvas file. Positions are 1-based; a problem without a position omits them.
+ * `file` names the embedded file the position is in (a board's child), as the board writes it.
+ */
 export interface Diagnostic {
   readonly severity: 'error' | 'warning'
   readonly message: string
+  readonly file?: string
   readonly line?: number
   readonly column?: number
   /** The source line, then a line whose caret marks the column. */
@@ -34,18 +38,27 @@ export type CheckReport =
     /** What the renderer made of the file, such as `stateDiagram，314×344 px`. */
     readonly detail: string
     readonly diagnostics: readonly Diagnostic[]
+    /** A board's embedded files, one line each: `flow ← order.mmd：图（stateDiagram，258×344 px）`. */
+    readonly embeds?: readonly string[]
     readonly image: ImageNote
     /** Pending comments on the file; absent when nothing reads them. */
     readonly comments?: CommentsNote
   }
 
+/** What the attached picture is, said after its size. */
+const PICTURE: { readonly [K in ModeId]: string } = {
+  diagram: '与右侧栏预览同一页面',
+  board: '嵌入的图、笔记、图片都按画板上的位置画出',
+}
+
 /**
- * Format one diagnostic as `3:5 错误 message`, followed by its indented snippet.
+ * Format one diagnostic as `3:5 错误 message` (`order.mmd:3:5 …` when it is in an embedded file),
+ * followed by its indented snippet.
  * @param diagnostic - the problem to show.
  * @returns one or more lines without a trailing newline.
  */
 export function formatDiagnostic(diagnostic: Diagnostic): string {
-  const where = diagnostic.line === undefined ? '' : `${diagnostic.line}:${diagnostic.column ?? 1} `
+  const where = diagnostic.line === undefined ? '' : `${diagnostic.file === undefined ? '' : `${diagnostic.file}:`}${diagnostic.line}:${diagnostic.column ?? 1} `
   const head = `${where}${diagnostic.severity === 'error' ? '错误' : '警告'} ${diagnostic.message}`
   if (diagnostic.snippet === undefined) return head
   return [head, ...diagnostic.snippet.split('\n').map(line => `    ${line}`)].join('\n')
@@ -93,10 +106,11 @@ export function formatCheck(report: CheckReport): string {
     lines.push(`✓ ${title} ${report.path}：校验通过（${report.detail}）${warnings ? `，${warnings} 个警告` : ''}`)
   }
   for (const diagnostic of report.diagnostics) lines.push(formatDiagnostic(diagnostic).replace(/^/gmu, '  '))
+  if (report.ok && report.embeds?.length) lines.push(`嵌入 ${report.embeds.length} 个：`, ...report.embeds.map(line => `  ${line}`))
   if (!report.ok) {
     lines.push('改好文件后再运行 canvas_check。')
   } else if (report.image.kind === 'attached') {
-    lines.push(`已出图：${report.image.width}×${report.image.height} PNG，按 ${Number(report.image.scale.toFixed(2))}× 截取，与右侧栏预览同一页面。`)
+    lines.push(`已出图：${report.image.width}×${report.image.height} PNG，按 ${Number(report.image.scale.toFixed(2))}× 截取，${PICTURE[report.mode]}。`)
   } else {
     lines.push(`未出图：${report.image.reason}`)
   }

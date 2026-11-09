@@ -1,0 +1,10 @@
+{
+	"nodes":[
+		{"id":"flow","type":"file","file":"order.mmd","x":0,"y":0,"width":520,"height":360},
+		{"id":"why","type":"text","text":"## 为什么\n支付失败要能重试","x":560,"y":0,"width":280,"height":160,"color":"4"},
+		{"id":"logo","type":"file","file":"img/logo.png","x":560,"y":200,"width":120,"height":120}
+	],
+	"edges":[
+		{"id":"e1","fromNode":"why","fromSide":"left","toNode":"flow","toSide":"right","label":"解释"}
+	]
+}

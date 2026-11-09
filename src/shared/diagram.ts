@@ -61,6 +61,14 @@ const tableMeasurer: TextMeasurer = {
   },
 }
 
+/**
+ * Width in CSS pixels of regular text in {@link DIAGRAM_FONT}, from the same table pele lays
+ * labels out with; boards use it to estimate whether a note fits its box.
+ */
+export function measureLabel(text: string, size: number): number {
+  return tableMeasurer.width(text, size, 0)
+}
+
 /** Fixed size and direction; limits sized for statecharts of a few hundred states. */
 export const DIAGRAM_OPTIONS: RenderOptions = {
   measurer: tableMeasurer,

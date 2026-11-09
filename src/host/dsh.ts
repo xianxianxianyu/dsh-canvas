@@ -34,10 +34,21 @@ export interface FsTarget {
   readonly displayPath: string
 }
 
+/**
+ * rc.5 FsWriteIntent. `replaceIfVersion` fails with code `FS_STALE_VERSION` when the file is not
+ * at that version any more (fs-local checks it under its per-file lock, then renames atomically).
+ */
+export type FsWriteIntent = { readonly kind: 'createIfAbsent' } | { readonly kind: 'replaceIfVersion'; readonly version: string }
+
+/** The rc.5 `ctx.fs` methods used here. Failures are FsError with a `code` such as `FS_NOT_FOUND`. */
 export interface FileSystem {
   resolve(path: string, options?: { readonly cwd?: string; readonly signal?: AbortSignal }): Promise<FsTarget>
-  stat(target: FsTarget, signal?: AbortSignal): Promise<{ readonly type: 'file' | 'directory' | string } | undefined>
+  /** `version` is opaque and changes on every write (fs-local: device, inode, size, mtime and ctime). */
+  stat(target: FsTarget, signal?: AbortSignal): Promise<{ readonly type: 'file' | 'directory' | string; readonly version: string; readonly size: number } | undefined>
   readText(target: FsTarget, signal?: AbortSignal): Promise<string>
+  /** The whole file; more than `maxBytes` fails with FS_TOO_LARGE. */
+  readBytes(target: FsTarget, signal: AbortSignal | undefined, maxBytes: number): Promise<Uint8Array>
+  writeText(target: FsTarget, content: string, expected?: FsWriteIntent, signal?: AbortSignal): Promise<{ readonly version: string }>
   processPath(target: FsTarget): string
 }
 

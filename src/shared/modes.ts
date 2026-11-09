@@ -1,6 +1,6 @@
 /**
  * The one list of canvas modes. The host (`HOST_MODES` in `src/host/check.ts`) and the client
- * (`PREVIEWS` in `src/client/index.tsx`) each keep a map typed `{ [K in ModeId]: … }`, so a new row
+ * (`SURFACES` in `src/client/index.tsx`) each keep a map typed `{ [K in ModeId]: … }`, so a new row
  * compiles only once both halves exist; `test/modes.test.mjs` requires its skill file and disjoint suffixes.
  */
 export interface ModeMeta {
@@ -14,6 +14,7 @@ export interface ModeMeta {
 
 export const MODES = {
   diagram: { extensions: ['mmd', 'mermaid'], skill: 'canvas-diagram', title: { zh: '图', en: 'Diagram' } },
+  board: { extensions: ['canvas'], skill: 'canvas-board', title: { zh: '画板', en: 'Board' } },
 } as const satisfies Record<string, ModeMeta>
 
 export type ModeId = keyof typeof MODES

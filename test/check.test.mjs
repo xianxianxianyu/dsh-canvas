@@ -86,7 +86,7 @@ test('a valid file passes with a one-line reason whenever no picture is attached
 
 test('only canvas suffixes and existing files are checked', async () => {
   const { run } = harness({ files: { '/work/notes.md': '# hi' } })
-  await assert.rejects(run({ path: 'notes.md' }), { message: 'canvas_check 只检查 .mmd, .mermaid 文件：/work/notes.md' })
+  await assert.rejects(run({ path: 'notes.md' }), { message: 'canvas_check 只检查 .mmd, .mermaid, .canvas 文件：/work/notes.md' })
   await assert.rejects(run({ path: 'gone.mmd' }), { message: '找不到文件：/work/gone.mmd' })
   await assert.rejects(run({ path: '' }), { message: 'path 必须是非空字符串' })
   await assert.rejects(run({ path: 'a.mmd', image: 'yes' }), { message: 'image 必须是 true 或 false' })

@@ -6,27 +6,38 @@ import { diagramNodes } from '../shared/nodes.ts'
 import { pageHtml, type Page } from '../shared/page.ts'
 import { formatCheck, type CommentsNote, type Diagnostic, type ImageNote } from '../shared/report.ts'
 import { resolveArtifact } from './artifact.ts'
+import { checkBoard } from './board-check.ts'
 import type { HeadlessBrowser, BrowserLocation } from './browser.ts'
 import type { CommentStore } from './comments.ts'
 import type { Agent, Attachments, FileSystem, ImageAttachment, Llm, Tool, ToolExecution, WorkingDirectory } from './dsh.ts'
 import { screenshot } from './raster.ts'
 
-type Checked =
+export type Checked =
   | { readonly ok: false; readonly diagnostics: readonly Diagnostic[] }
   | {
     readonly ok: true
     readonly detail: string
     readonly diagnostics: readonly Diagnostic[]
+    /** A board's embedded files, one line each. */
+    readonly embeds?: readonly string[]
     /** Commentable element id → its visible label, for anchor drift. */
     readonly labels: ReadonlyMap<string, string>
     /** The shared page, with these elements framed. */
     page(outline: readonly string[]): Page
   }
 
-/** How the host validates and lays out each mode; the client keeps the matching preview map. */
-const HOST_MODES: { readonly [K in ModeId]: { check(source: string): Checked } } = {
+/** What a mode's check may read besides the file's text: a board reads the files it embeds. */
+export interface CheckContext {
+  readonly fs: FileSystem
+  /** The checked file's canonical absolute path. */
+  readonly path: string
+  readonly signal: AbortSignal
+}
+
+/** How the host validates and lays out each mode; the client keeps the matching surface map. */
+const HOST_MODES: { readonly [K in ModeId]: { check(source: string, context: CheckContext): Promise<Checked> } } = {
   diagram: {
-    check(source) {
+    async check(source) {
       const diagram = renderDiagram(source)
       if (!diagram.ok) return diagram
       return {
@@ -39,6 +50,7 @@ const HOST_MODES: { readonly [K in ModeId]: { check(source: string): Checked } }
       }
     },
   },
+  board: { check: checkBoard },
 }
 
 export interface CheckArgs {
@@ -110,7 +122,7 @@ export async function checkFile(deps: CheckDeps, args: CheckArgs, exec: ToolExec
   const info = await deps.fs.stat(target, signal)
   if (info === undefined) throw new Error(`找不到文件：${target.displayPath}`)
   if (info.type !== 'file') throw new Error(`不是普通文件：${target.displayPath}`)
-  const checked = HOST_MODES[mode].check(await deps.fs.readText(target, signal))
+  const checked = await HOST_MODES[mode].check(await deps.fs.readText(target, signal), { fs: deps.fs, path, signal })
   if (!checked.ok) throw new Error(formatCheck({ path, mode, ok: false, diagnostics: checked.diagnostics }))
   // Comments never change the verdict: a store that cannot be read becomes one line of the report.
   let comments: CommentsNote
@@ -125,7 +137,10 @@ export async function checkFile(deps: CheckDeps, args: CheckArgs, exec: ToolExec
   const picture = args.image
     ? await pictureOf(deps, checked.page(outline), `${basename(path)}.png`, exec)
     : { note: { kind: 'skipped', reason: '本次只校验（image: false）' } as const }
-  const text = formatCheck({ path, mode, ok: true, detail: checked.detail, diagnostics: checked.diagnostics, image: picture.note, comments })
+  const text = formatCheck({
+    path, mode, ok: true, detail: checked.detail, diagnostics: checked.diagnostics, image: picture.note, comments,
+    ...checked.embeds === undefined ? {} : { embeds: checked.embeds },
+  })
   return picture.image === undefined ? { text } : { text, image: picture.image }
 }
 
@@ -179,7 +194,7 @@ export function canvasCheckTool(deps: CheckDeps): Tool<unknown, CheckValue> {
   const kinds = Object.values(MODES).map(mode => `${mode.title.zh}（${mode.extensions.map(extension => `.${extension}`).join(' ')}）`).join('、')
   return {
     name: 'canvas_check',
-    description: `校验 canvas 文件：${kinds}。有错时返回 isError，每个错误带 行:列 和出错片段；通过时在能看图的模型上附一张和右侧栏预览出自同一份 HTML 的 PNG。反复修改时传 image: false 只校验，定稿前不传 image 看一次图。不能出图时（模型不支持看图、找不到浏览器等）仍算通过，并写明「未出图」的原因。`,
+    description: `校验 canvas 文件：${kinds}。有错时返回 isError，每个错误带 行:列 和出错片段；通过时在能看图的模型上附一张 PNG：图表和右侧栏预览出自同一份 HTML，画板是把嵌入的图、笔记、图片按位置排好的合成图（嵌入的文件也一起校验）。反复修改时传 image: false 只校验，定稿前不传 image 看一次图。不能出图时（模型不支持看图、找不到浏览器等）仍算通过，并写明「未出图」的原因。`,
     parameters: {
       type: 'object', additionalProperties: false,
       properties: {
