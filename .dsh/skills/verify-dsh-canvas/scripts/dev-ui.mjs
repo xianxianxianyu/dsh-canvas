@@ -40,6 +40,7 @@ export const SEL = {
 }
 
 const NEW_PROMPT = /name="(.*)"/.exec(SEL.newPrompt)[1]
+const REPLY_PROMPT = /name="(.*)"/.exec(SEL.replyPrompt)[1]
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 async function poll(what, check, timeoutMs, everyMs = 1000) {
@@ -84,9 +85,10 @@ export async function currentSession(tab) {
 }
 
 /**
- * Open the UI in an isolated headless Chrome and get past 预览版说明. Loading the page persists a
- * blank session (新会话) in the selected workspace, and that session becomes the conversation
- * once you send into it. open() records its id in `<run>/sessions.json`. Use open() for every page
+ * Open the UI in an isolated headless Chrome and get past 预览版说明. A page load reopens the
+ * session that was selected last when that one is a conversation; otherwise it persists a new
+ * blank session (新会话) in the selected workspace, which becomes the conversation once you send
+ * into it. open() records a blank session's id in `<run>/sessions.json`. Use open() for every page
  * load, never tab.goto or a reload, so each new blank session is recorded.
  */
 export async function open(browser, { name = 'canvas-dev', url, run }) {
@@ -96,13 +98,14 @@ export async function open(browser, { name = 'canvas-dev', url, run }) {
     app: { path: CHROME, args: ['--headless=new', `--user-data-dir=${chromeProfile(run)}`, '--hide-scrollbars'], tern: false, relay: false },
   })
   await tab.emulate({ viewport: { width: 1600, height: 1000 } })
-  await poll('the composer or 预览版说明', async () => (await elements(tab)).some(e => e.role === 'button' && e.name === '继续' || e.role === 'textbox' && e.name === NEW_PROMPT), 30_000)
+  const composer = e => e.role === 'textbox' && (e.name === NEW_PROMPT || e.name === REPLY_PROMPT)
+  await poll('a composer or 预览版说明', async () => (await elements(tab)).some(e => e.role === 'button' && e.name === '继续' || composer(e)), 30_000)
   if ((await elements(tab)).some(e => e.role === 'button' && e.name === '继续')) {
     await tab.click(SEL.notice)
-    await poll('the composer', async () => (await elements(tab)).some(e => e.role === 'textbox' && e.name === NEW_PROMPT), 10_000)
+    await poll('a composer', async () => (await elements(tab)).some(composer), 10_000)
   }
-  const blank = await poll('the blank session row', () => currentSession(tab).catch(() => undefined), 10_000, 250)
-  recordSession(run, blank.id)
+  const current = await poll('the selected session row', () => currentSession(tab).catch(() => undefined), 10_000, 250)
+  if (current.title === '新会话') recordSession(run, current.id)
   return tab
 }
 
