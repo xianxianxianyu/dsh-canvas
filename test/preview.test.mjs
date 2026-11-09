@@ -116,3 +116,28 @@ test('after sending or cancelling a comment, Esc and C still drive comment mode'
     assert.equal(await commenting(), null, 'Esc leaves comment mode after cancelling')
   })
 })
+
+test('re-reading the file keeps the list, comment mode, the draft, the view and the pins', { skip }, async () => {
+  await withPreview(async page => {
+    await comment(page, 's3', '重试')
+    await page.getByRole('button', { name: '批注列表', exact: true }).click()
+    await page.getByRole('button', { name: '放大', exact: true }).click()
+    const zoom = await page.getByRole('button', { name: '原始大小', exact: true }).textContent()
+    await page.locator('[data-canvas-node="s1"]').click()
+    await page.locator('[data-canvas-draft] textarea').fill('半句话')
+
+    // DSH unmounts the body while it re-reads the changed file, then mounts one with the new bytes.
+    const remounted = await page.evaluate(source => {
+      window.hide()
+      window.show(source)
+      // Synchronously after the remount, before the route can answer.
+      return { pins: document.querySelectorAll('[data-canvas-pin]').length, framed: document.querySelector('[data-canvas-diagram] iframe').srcdoc.includes('outline') }
+    }, SOURCE.replace('支付中', '处理中'))
+    assert.deepEqual(remounted, { pins: 1, framed: true }, 'pins and frames come back without waiting for the route')
+    assert.match(await page.locator('[data-canvas-diagram] iframe').getAttribute('srcdoc'), /处理中/, 'the new bytes are drawn')
+    assert.equal(await page.locator('[data-canvas-comments]').count(), 1, 'the list stays open')
+    assert.equal(await page.locator('[data-canvas-diagram]').getAttribute('data-canvas-commenting'), 'true', 'comment mode stays on')
+    assert.equal(await page.locator('[data-canvas-draft] textarea').inputValue(), '半句话', 'the unsent draft survives')
+    assert.equal(await page.getByRole('button', { name: '原始大小', exact: true }).textContent(), zoom, 'the zoom stays')
+  })
+})

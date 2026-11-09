@@ -1,6 +1,7 @@
 import { parseFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CommentsSnapshot, UserOp } from '../shared/comment-schema.ts'
+import { useTabState } from './tab-state.ts'
 
 /** Document-relative, like DSH's own routes, so a mounted web app reaches its own Host. */
 const ROUTE = 'api/canvas/comments'
@@ -31,8 +32,9 @@ async function errorOf(response: Response): Promise<string> {
 }
 
 /**
- * The comments of the previewed file, kept fresh while the page is visible.
- * @param resourceAddress - the document tab's `dsh-resource://file/…` address.
+ * The comments of the previewed file, kept fresh while the page is visible. The last comments
+ * fetched stay with the tab, so a body remounted for new file bytes shows them at once.
+ * @param resourceAddress - the document tab's `dsh-resource://file/…` address; the caller is keyed by it.
  * @returns the current comments and a way to change them.
  */
 export function useComments(resourceAddress: string): CommentsHandle {
@@ -41,7 +43,7 @@ export function useComments(resourceAddress: string): CommentsHandle {
     const address = parseFileAddress(resourceAddress)
     return address === undefined ? undefined : address.scope === 'session' ? { sessionId: address.sessionId, path: address.path } : { path: address.path }
   }, [resourceAddress])
-  const [state, setState] = useState<CommentsState>({ status: 'loading' })
+  const [state, setState] = useTabState<CommentsState>(resourceAddress, 'comments', { status: 'loading' })
   const [saveError, setSaveError] = useState<string>()
   const version = useRef<string>(undefined)
 
@@ -51,7 +53,6 @@ export function useComments(resourceAddress: string): CommentsHandle {
       setState({ status: 'failed', error: resourceAddress })
       return undefined
     }
-    setState({ status: 'loading' })
     const lifetime = new AbortController()
     // A failed poll keeps comments already shown; only a first load that fails shows the error.
     const failed = (error: string): void => { setState(previous => previous.status === 'ready' ? previous : { status: 'failed', error }) }

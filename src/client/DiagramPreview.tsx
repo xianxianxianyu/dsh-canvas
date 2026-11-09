@@ -9,6 +9,7 @@ import { formatDiagnostic } from '../shared/report.ts'
 import { CommentList, statusColor, type StatusFilter } from './CommentList.tsx'
 import { useComments, type CommentsHandle } from './comments.ts'
 import type { DocumentBodyProps } from './dsh.ts'
+import { useTabState } from './tab-state.ts'
 
 // DSH sets the root `color-scheme` to the active theme's light or dark.
 function readScheme(): Scheme {
@@ -26,9 +27,15 @@ const decoder = new TextDecoder()
 /**
  * The right-sidebar renderer for Mermaid files: pele's SVG in the same page the host screenshots,
  * with the person's comments pinned on its nodes. DSH re-reads the file when it changes, which
- * replaces `content` and redraws; comments refresh on their own.
+ * remounts this body with the new `content`; comments refresh on their own, and the tab's state
+ * (comment list, comment mode, draft, zoom) is kept per file address across those remounts.
  */
-export function DiagramPreview({ content, resourceAddress, t }: DocumentBodyProps): ReactNode {
+export function DiagramPreview(props: DocumentBodyProps): ReactNode {
+  // One body per file, so per-tab state never carries over to another file shown in the same slot.
+  return <DiagramBody key={props.resourceAddress} {...props} />
+}
+
+function DiagramBody({ content, resourceAddress, t }: DocumentBodyProps): ReactNode {
   const scheme = useSyncExternalStore(watchScheme, readScheme)
   const data = content.kind === 'bytes' ? content.data : undefined
   const outcome = useMemo((): DiagramOutcome | undefined => {
@@ -57,7 +64,7 @@ export function DiagramPreview({ content, resourceAddress, t }: DocumentBodyProp
       </pre>
     </div>
   }
-  return <Viewport page={page} scheme={scheme} nodes={nodes} threads={threads} comments={comments} t={t} />
+  return <Viewport address={resourceAddress} page={page} scheme={scheme} nodes={nodes} threads={threads} comments={comments} t={t} />
 }
 
 interface View { readonly scale: number; readonly x: number; readonly y: number }
@@ -82,7 +89,7 @@ function onScreen(view: View, box: Box): { readonly left: number; readonly top: 
   }
 }
 
-interface Draft { readonly id: string; readonly node: DiagramNode; readonly text: string; readonly saving: boolean }
+interface Draft { readonly id: string; readonly node: DiagramNode; readonly text: string }
 
 /**
  * Client-minted comment id: time, then randomness, within the store's `[A-Za-z0-9_-]{1,64}`.
@@ -98,7 +105,8 @@ function newCommentId(): string {
  * Comment mode (button or C): click a node, type, Enter. The page stays a sandboxed iframe; nodes
  * are picked on a transparent layer laid over it from the SVG's own geometry.
  */
-function Viewport({ page, scheme, nodes, threads, comments, t }: {
+function Viewport({ address, page, scheme, nodes, threads, comments, t }: {
+  readonly address: string
   readonly page: Page
   readonly scheme: Scheme
   readonly nodes: readonly DiagramNode[]
@@ -109,13 +117,14 @@ function Viewport({ page, scheme, nodes, threads, comments, t }: {
   const pane = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ width: 0, height: 0 })
   // `undefined` follows the pane: the chart refits on resize and on every redraw.
-  const [manual, setManual] = useState<View>()
+  const [manual, setManual] = useTabState<View | undefined>(address, 'view', undefined)
   const press = useRef<{ readonly pointer: number; readonly x: number; readonly y: number; readonly from: View; readonly manual: View | undefined; readonly node: string | undefined } | undefined>(undefined)
-  const [commenting, setCommenting] = useState(false)
-  const [draft, setDraft] = useState<Draft>()
-  const [listOpen, setListOpen] = useState(false)
-  const [filter, setFilter] = useState<StatusFilter>({ open: true, addressed: true, resolved: false })
-  const [focused, setFocused] = useState<string>()
+  const [commenting, setCommenting] = useTabState(address, 'commenting', false)
+  const [draft, setDraft] = useTabState<Draft | undefined>(address, 'draft', undefined)
+  const [saving, setSaving] = useState(false)
+  const [listOpen, setListOpen] = useTabState(address, 'listOpen', false)
+  const [filter, setFilter] = useTabState<StatusFilter>(address, 'filter', { open: true, addressed: true, resolved: false })
+  const [focused, setFocused] = useTabState<string | undefined>(address, 'focused', undefined)
   const [hovered, setHovered] = useState<string>()
   const view = manual ?? fitted(box, page)
   const latest = useRef(view)
@@ -170,7 +179,7 @@ function Viewport({ page, scheme, nodes, threads, comments, t }: {
     // A click leaves the view as it was, including following the pane.
     setManual(start.manual)
     const node = nodes.find(candidate => candidate.id === start.node)
-    if (commenting && node !== undefined) setDraft(previous => previous?.node.id === node.id ? previous : { id: newCommentId(), node, text: '', saving: false })
+    if (commenting && node !== undefined) setDraft(previous => previous?.node.id === node.id ? previous : { id: newCommentId(), node, text: '' })
   }
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     if ((event.target as Element).closest('textarea, input') || event.metaKey || event.ctrlKey || event.altKey) return
@@ -192,12 +201,13 @@ function Viewport({ page, scheme, nodes, threads, comments, t }: {
   }
 
   const submit = async (): Promise<void> => {
-    if (draft === undefined || !draft.text.trim() || draft.saving) return
-    setDraft({ ...draft, saving: true })
+    if (draft === undefined || !draft.text.trim() || saving) return
+    setSaving(true)
     const op: UserOp = { op: 'create', id: draft.id, text: draft.text.trim(), anchor: { target: draft.node.id, label: draft.node.label } }
     // The id stays with the draft, so pressing Enter again after a failure cannot create a second comment.
-    if (await comments.apply([op])) closeDraft()
-    else setDraft(current => current === undefined ? current : { ...current, saving: false })
+    const sent = await comments.apply([op])
+    setSaving(false)
+    if (sent) closeDraft()
   }
 
   // Pins: one per drawn node that has threads passing the list's filter, colored by the most urgent.
@@ -288,7 +298,7 @@ function Viewport({ page, scheme, nodes, threads, comments, t }: {
         {comments.saveError !== undefined && <div role="alert" style={{ fontSize: 12, color: red }}>{t('comment.saveFailed', { error: comments.saveError })}</div>}
         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
           <button type="button" style={{ ...button, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)' }} onClick={closeDraft}>{t('comment.cancel')}</button>
-          <button type="submit" disabled={draft.saving || !draft.text.trim()} style={{ ...button, background: red, color: '#fff', opacity: draft.saving || !draft.text.trim() ? 0.5 : 1 }}>{t('comment.send')}</button>
+          <button type="submit" disabled={saving || !draft.text.trim()} style={{ ...button, background: red, color: '#fff', opacity: saving || !draft.text.trim() ? 0.5 : 1 }}>{t('comment.send')}</button>
         </div>
       </form>}
       <div data-canvas-ui style={{ ...bar, left: 8, top: 8 }}>
