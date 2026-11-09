@@ -148,7 +148,7 @@ export async function prepareBoard(source: string, context: BoardReadContext): P
   }
   if (layoutOf.bounds.width > MAX_BOARD_SPAN || layoutOf.bounds.height > MAX_BOARD_SPAN) {
     const node = board.nodes.reduce<BoardNode | undefined>((outer, node) => outer === undefined || Math.max(node.x + node.width, node.y + node.height) > Math.max(outer.x + outer.width, outer.y + outer.height) ? node : outer, undefined)
-    const { line, column } = locate(source, node === undefined ? 0 : layout.elements.get(node.id)!.start)
+    const { line, column } = locate(node === undefined ? 0 : layout.elements.get(node.id)!.start)
     diagnostics.push({ severity: 'warning', line, column, message: `画板范围太大（${Math.ceil(layoutOf.bounds.width)}×${Math.ceil(layoutOf.bounds.height)} px），先把节点收拢` })
   }
   const contents = new Map<string, BoardContent>()
