@@ -9,7 +9,7 @@ import { canvasCheckTool } from './check.ts'
 import { canvasCommentTool } from './comment-tool.ts'
 import { CommentStore } from './comments.ts'
 import type { HostContext, SkillCandidate } from './dsh.ts'
-import { commentsRoute } from './route.ts'
+import { boardRoute, commentsRoute } from './route.ts'
 
 export const name = 'dsh-canvas'
 export const inject = ['tools', 'skills', 'fs', 'workingDirectory']
@@ -58,12 +58,12 @@ export function apply(ctx: HostContext, config: Config): void {
   }))
   ctx.tools.register(canvasCommentTool({ fs: ctx.fs, workingDirectory: ctx.workingDirectory, store }))
   ctx.inject(['connection', 'sessions'], scope => {
-    scope.connection.fetch.register(commentsRoute({
-      store,
-      fs: ctx.fs,
-      // Live Sessions first, then the stored header, as DSH resolves `dsh-resource://file/session/<id>/<path>`.
-      sessionCwd: async (id, signal) => (scope.sessions.get(id)?.header ?? (await scope.get('sessionPersistence')?.stat(id, { signal }))?.header)?.cwd,
-    }))
+    // Live Sessions first, then the stored header, as DSH resolves `dsh-resource://file/session/<id>/<path>`.
+    const sessionCwd = async (id: string, signal: AbortSignal): Promise<string | undefined> =>
+      (scope.sessions.get(id)?.header ?? (await scope.get('sessionPersistence')?.stat(id, { signal }))?.header)?.cwd
+    scope.connection.fetch.register(commentsRoute({ store, fs: ctx.fs, sessionCwd }))
+    // The person's board edits; the agent edits the same file with DSH's own tools (see board-write.ts).
+    scope.connection.fetch.register(boardRoute({ fs: ctx.fs, sessionCwd }))
   })
 
   ctx.skills.registerProvider(() => ({

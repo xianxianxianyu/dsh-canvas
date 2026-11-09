@@ -1,0 +1,36 @@
+/**
+ * The one definition of a board operation and of the board route's request, as zod schemas; the
+ * `BoardOp` type is derived from them. Only the host imports the schemas; shared code and the
+ * client import the type only, so zod is never bundled into the browser module.
+ */
+import { z } from 'zod'
+import { SIDES } from './board.ts'
+
+const id = z.string().min(1).max(200)
+/** JSON Canvas positions and sizes are integers. */
+const coordinate = z.int().min(-10_000_000).max(10_000_000)
+const size = z.int().min(1).max(1_000_000)
+const text = z.string().max(20_000)
+const color = z.string().regex(/^(?:[1-6]|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6})$/u, 'color 是 "1" 到 "6" 或 #rgb / #rrggbb')
+
+export const boardOpSchema = z.discriminatedUnion('op', [
+  /** Drag or resize: the node's absolute box. */
+  z.strictObject({ op: z.literal('place'), id, x: coordinate, y: coordinate, width: size.optional(), height: size.optional() }),
+  /** A new sticky note (a text node); never replaces an existing element. */
+  z.strictObject({ op: z.literal('addNote'), id, text, x: coordinate, y: coordinate, width: size, height: size, color: color.optional() }),
+  /** New note text, only while the note still reads `ifText`. */
+  z.strictObject({ op: z.literal('setText'), id, text, ifText: text }),
+  z.strictObject({ op: z.literal('addEdge'), id, fromNode: id, toNode: id, fromSide: z.enum(SIDES).optional(), toSide: z.enum(SIDES).optional(), label: z.string().max(500).optional() }),
+  z.strictObject({ op: z.literal('removeEdge'), id }),
+  /** Remove nodes and every edge touching them. */
+  z.strictObject({ op: z.literal('removeNodes'), ids: z.array(id).min(1).max(200) }),
+])
+
+/** `POST /api/canvas/board`. Without `sessionId` the path must be absolute. */
+export const boardPostSchema = z.strictObject({
+  sessionId: z.string().min(1).optional(),
+  path: z.string().min(1),
+  ops: z.array(boardOpSchema).min(1).max(200),
+})
+
+export type BoardOp = z.infer<typeof boardOpSchema>

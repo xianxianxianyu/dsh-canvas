@@ -152,7 +152,7 @@ THIS SOFTWARE.
 - Upstream: <https://github.com/colinhacks/zod>
 - Author: Colin McDonnell.
 - Locked version: `4.6.7` in `pnpm-lock.yaml`.
-- Bundled use: `src/shared/comment-schema.ts` defines the comment store format and the comment route's request with zod; the host imports it, so esbuild includes it in `lib/index.js` only. The browser module imports those types, never the schemas. zod has no production dependencies.
+- Bundled use: `src/shared/comment-schema.ts` and `src/shared/board-schema.ts` define the comment store format and the comment and board routes' requests with zod; the host imports them, so esbuild includes it in `lib/index.js` only. The browser module imports those types, never the schemas. zod has no production dependencies.
 - License source: the `zod` 4.6.7 package's `LICENSE`, reproduced verbatim below.
 
 ```text
