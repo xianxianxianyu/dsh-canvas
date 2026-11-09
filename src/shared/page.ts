@@ -3,7 +3,7 @@
  * iframe and the host screenshots it in headless Chrome, so the person and the model see one page.
  * Every page is script-free and offline: the CSP allows inline styles and data: images only.
  */
-import { FILE_NODE, NOTE_TEXT, type Scene, type SceneNode } from './board.ts'
+import { FILE_NODE, NOTE_TEXT, type BoardNode, type Scene, type SceneEdge } from './board.ts'
 import { DIAGRAM_FONT } from './diagram.ts'
 
 export type Scheme = 'light' | 'dark'
@@ -144,14 +144,22 @@ export function escapeHtml(text: string): string {
 const PRESETS: Readonly<Record<string, string>> = { 1: '#fb464c', 2: '#e9973f', 3: '#e0de71', 4: '#44cf6e', 5: '#53dfdd', 6: '#a882ff' }
 
 /** A node's or edge's color: a preset, or the file's hex color (validated by `parseBoard`). */
-function colorOf(color: string | undefined): string | undefined {
+export function boardColor(color: string | undefined): string | undefined {
   return color === undefined ? undefined : PRESETS[color] ?? color
 }
 
-function boardCss(scheme: Scheme, width: number, height: number): string {
+/** Shared edge-label pixel metrics for the static page and the interactive painter. */
+export const EDGE_LABEL = { fontSize: 12, padding: '1px 6px', borderRadius: 4 } as const
+
+/** The scene's exact cubic curve, optionally translated into a static page's coordinates. */
+export function edgePath({ from, to, c1, c2 }: Pick<SceneEdge, 'from' | 'to' | 'c1' | 'c2'>, dx = 0, dy = 0): string {
+  return `M${from.x + dx} ${from.y + dy}C${c1.x + dx} ${c1.y + dy} ${c2.x + dx} ${c2.y + dy} ${to.x + dx} ${to.y + dy}`
+}
+
+function boardCss(scheme: Scheme, width: string, height: string): string {
   const { pele } = THEMES[scheme]
   const [h1, h2, h3] = NOTE_TEXT.headings
-  return `body{width:${width}px;height:${height}px;position:relative;overflow:hidden;font-family:${DIAGRAM_FONT};color:${pele.fg}}
+  return `body{width:${width};height:${height};position:relative;overflow:hidden;font-family:${DIAGRAM_FONT};color:${pele.fg}}
 .node{position:absolute;box-sizing:border-box;border:${NOTE_TEXT.border}px solid var(--c,${pele.border});border-radius:8px;overflow:hidden;background:color-mix(in srgb,var(--c,transparent) 10%,${pele.surface})}
 .group{background:color-mix(in srgb,var(--c,${pele.muted}) 7%,transparent)}
 .group>.label{position:absolute;left:10px;top:6px;font-size:13px;font-weight:600;color:${pele.muted}}
@@ -176,14 +184,13 @@ function boardCss(scheme: Scheme, width: number, height: number): string {
 .card{display:flex;flex-direction:column;gap:4px;padding:12px;box-sizing:border-box;font-size:13px;color:${pele.muted};overflow-wrap:anywhere}
 .card>b{color:${pele.fg}}
 .edges{position:absolute;left:0;top:0;overflow:visible}
-.edge-label{position:absolute;transform:translate(-50%,-50%);padding:1px 6px;border-radius:4px;background:${pele.bg};color:${pele.fg};font-size:12px;white-space:nowrap}`
+.edge-label{position:absolute;transform:translate(-50%,-50%);padding:${EDGE_LABEL.padding};border-radius:${EDGE_LABEL.borderRadius}px;background:${pele.bg};color:${pele.fg};font-size:${EDGE_LABEL.fontSize}px;white-space:nowrap}`
 }
 
-function nodeHtml({ node, rect }: SceneNode, contents: ReadonlyMap<string, BoardContent>, dx: number, dy: number): string {
-  const color = colorOf(node.color)
-  const style = `left:${rect.x + dx}px;top:${rect.y + dy}px;width:${rect.width}px;height:${rect.height}px${color === undefined ? '' : `;--c:${color}`}`
+function nodeHtml(node: BoardNode, content: BoardContent | undefined, geometry: string): string {
+  const color = boardColor(node.color)
+  const style = `${geometry}${color === undefined ? '' : `;--c:${color}`}`
   const open = `<div class="node ${node.type}" data-node-id="${escapeHtml(node.id)}" style="${style}">`
-  const content = contents.get(node.id)
   if (node.type === 'text') return `${open}${content?.kind === 'html' ? `<div class="md">${content.html}</div>` : `<div class="md plain">${escapeHtml(node.text)}</div>`}</div>`
   if (node.type === 'link') return `${open}<div class="card"><b>链接</b><span>${escapeHtml(node.url)}</span></div></div>`
   if (node.type === 'group') return `${open}${node.label === undefined ? '' : `<div class="label">${escapeHtml(node.label)}</div>`}</div>`
@@ -193,6 +200,28 @@ function nodeHtml({ node, rect }: SceneNode, contents: ReadonlyMap<string, Board
       : shown.kind === 'image' ? `<img src="${escapeHtml(shown.src)}" alt="">`
         : `<div class="card"><b>${escapeHtml(shown.title)}</b><span>${escapeHtml(shown.detail)}</span></div>`
   return `${open}<div class="name">${escapeHtml(node.file)}</div><div class="body">${body}</div></div>`
+}
+
+/**
+ * One board node in a sandboxed iframe. The document fills the iframe rather than baking in the
+ * node's board position or dimensions, so moving and resizing never changes its HTML.
+ * @param node - the validated board node; its dimensions are returned as page metrics only.
+ * @param content - the same prepared content used by the composite board page.
+ * @param scheme - light or dark.
+ * @returns the responsive document with a transparent background, including for group nodes.
+ */
+export function boardNodePageHtml(node: BoardNode, content: BoardContent | undefined, scheme: Scheme): Page {
+  return {
+    html: documentHtml(
+      scheme,
+      `${boardCss(scheme, '100%', '100%')}\nhtml,body{width:100%;height:100%;background:transparent}`,
+      'canvas-board-node',
+      nodeHtml(node, content, 'left:0px;top:0px;width:100%;height:100%'),
+    ),
+    width: node.width,
+    height: node.height,
+    background: 'transparent',
+  }
 }
 
 /**
@@ -213,14 +242,19 @@ export function boardPageHtml(scene: Scene, contents: ReadonlyMap<string, BoardC
   const dx = PAGE_PADDING - scene.bounds.x
   const dy = PAGE_PADDING - scene.bounds.y
   const theme = THEMES[scheme]
-  const groups = scene.nodes.filter(entry => entry.node.type === 'group')
-  const others = scene.nodes.filter(entry => entry.node.type !== 'group')
-  const colors = [...new Set(scene.edges.map(entry => colorOf(entry.edge.color) ?? theme.pele.line))]
+  const groups: string[] = []
+  const others: string[] = []
+  for (const { node, rect } of scene.nodes) {
+    const html = nodeHtml(node, contents.get(node.id), `left:${rect.x + dx}px;top:${rect.y + dy}px;width:${rect.width}px;height:${rect.height}px`)
+    ;(node.type === 'group' ? groups : others).push(html)
+  }
+  const colors = [...new Set(scene.edges.map(entry => boardColor(entry.edge.color) ?? theme.pele.line))]
   const markers = colors.map((color, index) => `<marker id="arrow-${index}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${color}"/></marker>`)
-  const paths = scene.edges.map(({ edge, from, to, c1, c2, arrows }) => {
-    const color = colorOf(edge.color) ?? theme.pele.line
+  const paths = scene.edges.map(geometry => {
+    const { edge, arrows } = geometry
+    const color = boardColor(edge.color) ?? theme.pele.line
     const marker = `url(#arrow-${colors.indexOf(color)})`
-    const d = `M${from.x + dx} ${from.y + dy}C${c1.x + dx} ${c1.y + dy} ${c2.x + dx} ${c2.y + dy} ${to.x + dx} ${to.y + dy}`
+    const d = edgePath(geometry, dx, dy)
     return `<path d="${d}" fill="none" stroke="${color}" stroke-width="2"${arrows.from ? ` marker-start="${marker}"` : ''}${arrows.to ? ` marker-end="${marker}"` : ''}/>`
   })
   const labels = scene.edges.flatMap(({ edge, mid }) => edge.label ? [`<div class="edge-label" style="left:${mid.x + dx}px;top:${mid.y + dy}px">${escapeHtml(edge.label)}</div>`] : [])
@@ -228,10 +262,10 @@ export function boardPageHtml(scene: Scene, contents: ReadonlyMap<string, BoardC
     ? `\n.node:is(${options.outline.map(id => `[data-node-id=${cssString(id)}]`).join(',')}){outline:2.5px dashed ${theme.comment};outline-offset:5px}`
     : ''
   const body = [
-    ...groups.map(entry => nodeHtml(entry, contents, dx, dy)),
+    ...groups,
     `<svg class="edges" xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><defs>${markers.join('')}</defs>${paths.join('')}</svg>`,
-    ...others.map(entry => nodeHtml(entry, contents, dx, dy)),
+    ...others,
     ...labels,
   ].join('\n')
-  return { html: documentHtml(scheme, `${boardCss(scheme, width, height)}${outline}`, 'canvas-board', body), width, height, background: theme.pele.bg }
+  return { html: documentHtml(scheme, `${boardCss(scheme, `${width}px`, `${height}px`)}${outline}`, 'canvas-board', body), width, height, background: theme.pele.bg }
 }

@@ -1,10 +1,10 @@
 /**
- * `canvas_check` for `.canvas` boards: validate the board, check each embedded file one level deep
- * (a diagram gets the diagram check), warn about what will look wrong, and lay out the composite
- * page that the model sees.
+ * Board content shared by the interactive tab and `canvas_check`: validate the board, prepare
+ * each embedded file one level deep, and report what will look wrong. The check additionally
+ * treats embed errors as failure and lays out the composite page that the model sees.
  */
 import { dirname } from 'node:path'
-import { FILE_NODE, NOTE_TEXT, embedOf, imageType, noteHeight, parseBoard, scene, type BoardNode, type FileNode } from '../shared/board.ts'
+import { FILE_NODE, NOTE_TEXT, embedOf, imageType, noteHeight, parseBoard, scene, type Board, type BoardNode, type FileNode, type Scene } from '../shared/board.ts'
 import { renderDiagram } from '../shared/diagram.ts'
 import { locate } from '../shared/json.ts'
 import { markdownHtml } from '../shared/markdown.ts'
@@ -16,6 +16,23 @@ import type { CheckContext, Checked } from './check.ts'
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024
 /** An embedded diagram drawn smaller than this is hard to read. */
 const LEGIBLE_SCALE = 0.5
+
+/** Preparation can only read; the interactive route has no write capability. */
+export type BoardReadContext = Pick<CheckContext, 'path' | 'signal'> & {
+  readonly fs: Pick<CheckContext['fs'], 'resolve' | 'processPath' | 'stat' | 'readText' | 'readBytes'>
+}
+
+/** Only structural source errors refuse a board; broken embeds stay visible as cards. */
+export type PreparedBoard =
+  | { readonly ok: false; readonly diagnostics: readonly Diagnostic[] }
+  | {
+    readonly ok: true
+    readonly board: Board
+    readonly scene: Scene
+    readonly contents: ReadonlyMap<string, BoardContent>
+    readonly diagnostics: readonly Diagnostic[]
+    readonly embeds: readonly string[]
+  }
 
 /** What one file node turned out to be. */
 interface Embedded {
@@ -40,7 +57,7 @@ function labelOf(node: BoardNode): string {
   return node.label ?? ''
 }
 
-async function embed({ fs, path, signal }: CheckContext, node: FileNode): Promise<Embedded> {
+async function embed({ fs, path, signal }: BoardReadContext, node: FileNode): Promise<Embedded> {
   const card = (detail: string): BoardContent => ({ kind: 'card', title: node.file, detail })
   const problem = (kind: 'errors' | 'warnings', message: string, summary: string): Embedded => ({
     content: card(summary), summary, errors: kind === 'errors' ? [message] : [], warnings: kind === 'warnings' ? [message] : [], located: [],
@@ -95,12 +112,12 @@ async function embed({ fs, path, signal }: CheckContext, node: FileNode): Promis
 }
 
 /**
- * Check a board.
+ * Prepare a structurally valid board's content and diagnostics without discarding broken embeds.
  * @param source - the board's text.
- * @param context - the Session filesystem and the board's canonical path, for its embeds.
- * @returns errors (the check fails) or the verdict with warnings, embed lines, comment labels and the page.
+ * @param context - the filesystem and the board's canonical path, for its embeds.
+ * @returns a refused source, or the board with all prepared content and diagnostics.
  */
-export async function checkBoard(source: string, context: CheckContext): Promise<Checked> {
+export async function prepareBoard(source: string, context: BoardReadContext): Promise<PreparedBoard> {
   const parsed = parseBoard(source)
   if (!parsed.ok) return parsed
   const { board, layout } = parsed
@@ -126,13 +143,26 @@ export async function checkBoard(source: string, context: CheckContext): Promise
       if (needed > node.height) diagnostics.push(at('warning', `节点 ${node.id} 的文字大约要 ${needed} px 高，框只有 ${node.height} px，放不下的部分会被截掉`))
     }
   }
+  return { ok: true, board, scene: layoutOf, contents, diagnostics, embeds: lines }
+}
+
+/**
+ * Check a board. Unlike the interactive renderer, any error (including a broken embed) fails.
+ * @param source - the board's text.
+ * @param context - the Session filesystem and the board's canonical path, for its embeds.
+ * @returns errors or the verdict with warnings, embed lines, comment labels and the page.
+ */
+export async function checkBoard(source: string, context: CheckContext): Promise<Checked> {
+  const prepared = await prepareBoard(source, context)
+  if (!prepared.ok) return prepared
+  const { board, scene: layoutOf, contents, diagnostics, embeds } = prepared
   if (diagnostics.some(diagnostic => diagnostic.severity === 'error')) return { ok: false, diagnostics }
   const { width, height } = layoutOf.bounds
   return {
     ok: true,
     detail: `${board.nodes.length} 个节点、${board.edges.length} 条连线，${Math.ceil(width)}×${Math.ceil(height)} px`,
     diagnostics,
-    embeds: lines,
+    embeds,
     labels: new Map(board.nodes.map(node => [node.id, labelOf(node)])),
     // The model gets the light page, like a diagram's.
     page: outline => boardPageHtml(layoutOf, contents, 'light', { outline }),

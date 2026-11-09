@@ -7,6 +7,7 @@ import { parse as parseYaml } from 'yaml'
 import { HeadlessBrowser, browserCandidates, locateBrowser } from './browser.ts'
 import { canvasCheckTool } from './check.ts'
 import { BoardJournal } from './board-journal.ts'
+import { boardRenderRoute } from './board-render.ts'
 import { canvasCommentTool } from './comment-tool.ts'
 import { CommentStore } from './comments.ts'
 import type { HostContext, SkillCandidate } from './dsh.ts'
@@ -67,6 +68,7 @@ export function apply(ctx: HostContext, config: Config): void {
     scope.connection.fetch.register(commentsRoute({ store, fs: ctx.fs, sessionCwd }))
     // The person's board edits; the agent edits the same file with DSH's own tools (see board-write.ts).
     scope.connection.fetch.register(boardRoute({ fs: ctx.fs, sessionCwd, journal }))
+    scope.connection.fetch.register(boardRenderRoute({ fs: ctx.fs }))
   })
 
   ctx.skills.registerProvider(() => ({
