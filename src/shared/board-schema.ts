@@ -26,10 +26,14 @@ export const boardOpSchema = z.discriminatedUnion('op', [
   z.strictObject({ op: z.literal('removeNodes'), ids: z.array(id).min(1).max(200) }),
 ])
 
-/** `POST /api/canvas/board`. Without `sessionId` the path must be absolute. */
-export const boardPostSchema = z.strictObject({
+/** Both board endpoints resolve the same canonical file; relative paths require a Session. */
+export const boardQuerySchema = z.strictObject({
   sessionId: z.string().min(1).optional(),
   path: z.string().min(1),
+})
+
+/** `POST /api/canvas/board`. */
+export const boardPostSchema = boardQuerySchema.extend({
   ops: z.array(boardOpSchema).min(1).max(200),
 })
 

@@ -6,6 +6,7 @@ import test from 'node:test'
 import { HeadlessBrowser } from '../src/host/browser.ts'
 import { canvasCheckTool, imageRoute } from '../src/host/check.ts'
 import { CommentStore } from '../src/host/comments.ts'
+import { BoardJournal } from '../src/host/board-journal.ts'
 
 const fixture = name => readFile(new URL(`fixtures/${name}`, import.meta.url), 'utf8')
 const signal = new AbortController().signal
@@ -52,6 +53,7 @@ function harness({
     browser: () => browser,
     headless,
     store,
+    journal: new BoardJournal(),
   })
   const run = async args => {
     const value = await tool.execute(args, { signal, agent: agentOn(model) })

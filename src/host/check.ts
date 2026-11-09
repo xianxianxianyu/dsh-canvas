@@ -11,6 +11,7 @@ import type { HeadlessBrowser, BrowserLocation } from './browser.ts'
 import type { CommentStore } from './comments.ts'
 import type { Agent, Attachments, FileSystem, ImageAttachment, Llm, Tool, ToolExecution, WorkingDirectory } from './dsh.ts'
 import { screenshot } from './raster.ts'
+import type { BoardJournal } from './board-journal.ts'
 
 export type Checked =
   | { readonly ok: false; readonly diagnostics: readonly Diagnostic[] }
@@ -102,6 +103,7 @@ export interface CheckDeps {
   readonly browser: () => BrowserLocation
   readonly headless: Pick<HeadlessBrowser, 'use'>
   readonly store: CommentStore
+  readonly journal: BoardJournal
 }
 
 export interface CheckValue {
@@ -122,8 +124,17 @@ export async function checkFile(deps: CheckDeps, args: CheckArgs, exec: ToolExec
   const info = await deps.fs.stat(target, signal)
   if (info === undefined) throw new Error(`找不到文件：${target.displayPath}`)
   if (info.type !== 'file') throw new Error(`不是普通文件：${target.displayPath}`)
-  const checked = await HOST_MODES[mode].check(await deps.fs.readText(target, signal), { fs: deps.fs, path, signal })
+  const source = await deps.fs.readText(target, signal)
+  const checked = await HOST_MODES[mode].check(source, { fs: deps.fs, path, signal })
   if (!checked.ok) throw new Error(formatCheck({ path, mode, ok: false, diagnostics: checked.diagnostics }))
+  const diagnostics = [...checked.diagnostics]
+  if (mode === 'board') for (const batch of deps.journal.lost(path, source)) {
+    const time = new Date(batch.at).toTimeString().slice(0, 5)
+    diagnostics.push({
+      severity: 'warning',
+      message: `检测到用户在 ${time} 的 ${batch.count} 个改动被覆盖（${batch.id}）；用 edit 恢复或说明原因。操作：${JSON.stringify(batch.ops)}`,
+    })
+  }
   // Comments never change the verdict: a store that cannot be read becomes one line of the report.
   let comments: CommentsNote
   let outline: readonly string[] = []
@@ -138,7 +149,7 @@ export async function checkFile(deps: CheckDeps, args: CheckArgs, exec: ToolExec
     ? await pictureOf(deps, checked.page(outline), `${basename(path)}.png`, exec)
     : { note: { kind: 'skipped', reason: '本次只校验（image: false）' } as const }
   const text = formatCheck({
-    path, mode, ok: true, detail: checked.detail, diagnostics: checked.diagnostics, image: picture.note, comments,
+    path, mode, ok: true, detail: checked.detail, diagnostics, image: picture.note, comments,
     ...checked.embeds === undefined ? {} : { embeds: checked.embeds },
   })
   return picture.image === undefined ? { text } : { text, image: picture.image }

@@ -5,6 +5,10 @@ import test from 'node:test'
 import { parseBoard } from '../src/shared/board.ts'
 import { MAX_ATTEMPTS } from '../src/host/board-write.ts'
 import { boardRoute } from '../src/host/route.ts'
+import { BoardJournal, BOARD_JOURNAL_LIMIT } from '../src/host/board-journal.ts'
+import { canvasCheckTool } from '../src/host/check.ts'
+import { CommentStore } from '../src/host/comments.ts'
+import { tmpdir } from 'node:os'
 
 const BOARD = readFileSync(new URL('fixtures/plan.canvas', import.meta.url), 'utf8')
 const PATH = '/work/plan.canvas'
@@ -54,14 +58,26 @@ function memoryFs(files) {
 
 function harness(files = { [PATH]: BOARD }) {
   const fs = memoryFs(files)
-  const route = boardRoute({ fs, sessionCwd: async id => ({ 'sess-1': '/work' })[id] })
+  const journal = new BoardJournal()
+  const route = boardRoute({ fs, sessionCwd: async id => ({ 'sess-1': '/work' })[id], journal })
   const post = async body => {
     const response = await route.fetch(new Request('http://127.0.0.1:3996/api/canvas/board', {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: typeof body === 'string' ? body : JSON.stringify(body),
     }))
     return { status: response.status, body: await response.json() }
   }
-  return { fs, route, post, text: () => fs.store.get(PATH).text, version: () => fs.store.get(PATH).version }
+  const get = async () => {
+    const response = await route.fetch(new Request(`http://127.0.0.1:3996/api/canvas/board?${new URLSearchParams({ path: PATH })}`))
+    return { status: response.status, body: await response.json() }
+  }
+  const check = canvasCheckTool({
+    fs, journal, workingDirectory: { ensure: async () => '/work' },
+    attachments: () => undefined, llm: () => undefined,
+    browser: () => ({ kind: 'missing', reason: 'not needed' }), headless: { use: () => assert.fail('image:false') },
+    store: new CommentStore(posix.join(tmpdir(), 'dsh-canvas-no-such-root')),
+  })
+  return { fs, route, post, get, text: () => fs.store.get(PATH).text, version: () => fs.store.get(PATH).version,
+    check: () => check.execute({ path: PATH, image: false }, { signal: new AbortController().signal }) }
 }
 
 const nodeIds = text => parseBoard(text).board.nodes.map(node => node.id)
@@ -72,10 +88,10 @@ function agentAddsNode(text) {
   return text.replace('"height":120}\n', '"height":120},\n\t\t{"id":"agent","type":"text","text":"agent 加的","x":0,"y":420,"width":200,"height":80}\n')
 }
 
-test('the board route is one exact owner route for POST', () => {
+test('the board route is one exact owner route for GET and POST', () => {
   const { route } = harness()
   assert.equal(route.path, '/api/canvas/board')
-  assert.deepEqual(route.methods, ['POST'])
+  assert.deepEqual(route.methods, ['GET', 'POST'])
   assert.equal(route.requestBody, 'buffered')
 })
 
@@ -164,4 +180,78 @@ test('requests are checked before anything is read', async () => {
   assert.deepEqual(fs.log, [])
   await bad({ sessionId: 'nobody', path: 'plan.canvas', ops: [{ op: 'removeEdge', id: 'e1' }] }, 404, 'not-found', /找不到会话 nobody/u)
   await bad({ path: '/work/gone.canvas', ops: [{ op: 'removeEdge', id: 'e1' }] }, 404, 'not-found', /找不到文件/u)
+})
+
+test('a blind agent overwrite is exposed as a recoverable lost user batch, then replay clears it', async () => {
+  const { post, get, fs, text } = harness()
+  const ops = [{ op: 'place', id: 'why', x: 600, y: 40 }]
+  await post({ path: PATH, ops })
+  assert.deepEqual((await get()).body, { lost: [] })
+  fs.put(PATH, BOARD)
+  const lost = await get()
+  assert.equal(lost.status, 200)
+  assert.equal(lost.body.lost.length, 1)
+  assert.deepEqual(lost.body.lost[0].ops, ops)
+  assert.equal(lost.body.lost[0].count, 1)
+  assert.ok(lost.body.lost[0].id)
+  assert.ok(!Number.isNaN(Date.parse(lost.body.lost[0].at)))
+  await post({ path: PATH, ops: lost.body.lost[0].ops })
+  assert.deepEqual((await get()).body, { lost: [] })
+  assert.equal(nodeOf(text(), 'why').x, 600)
+})
+
+test('new user moves supersede older positions without losing an earlier resize intent', async () => {
+  const { post, get, fs, text } = harness()
+  await post({ path: PATH, ops: [{ op: 'place', id: 'why', x: 600, y: 40, width: 320 }] })
+  await post({ path: PATH, ops: [{ op: 'place', id: 'why', x: 700, y: 50 }] })
+  assert.deepEqual((await get()).body, { lost: [] }, 'the user moving again is not a lost update')
+  fs.put(PATH, text().replace('"width":320', '"width":280'))
+  const [batch] = (await get()).body.lost
+  assert.deepEqual(batch.ops, [{ op: 'place', id: 'why', x: 700, y: 50, width: 320 }])
+})
+
+test('user deletion and recreation retire old add, edge, geometry and deletion intents', async () => {
+  const { post, get } = harness()
+  const note = { op: 'addNote', id: 'n', text: 'note', x: 0, y: 400, width: 100, height: 100 }
+  await post({ path: PATH, ops: [note, { op: 'addEdge', id: 'n-edge', fromNode: 'n', toNode: 'why' }] })
+  await post({ path: PATH, ops: [{ op: 'place', id: 'n', x: 20, y: 400 }] })
+  await post({ path: PATH, ops: [{ op: 'removeNodes', ids: ['n'] }] })
+  assert.deepEqual((await get()).body, { lost: [] })
+  await post({ path: PATH, ops: [note] })
+  assert.deepEqual((await get()).body, { lost: [] }, 'intentional recreation must not suggest deleting it again')
+})
+
+test('conflicting text and refused or unchanged route ops do not create loss reports', async () => {
+  const { post, get, fs, text } = harness()
+  const old = nodeOf(text(), 'why').text
+  await post({ path: PATH, ops: [{ op: 'setText', id: 'why', ifText: old, text: 'user text' }] })
+  fs.put(PATH, text().replace('"text":"user text"', '"text":"third text"'))
+  assert.deepEqual((await get()).body, { lost: [] }, 'a third text is a conflict, not replayable loss')
+  await post({ path: PATH, ops: [{ op: 'setText', id: 'why', ifText: old, text: 'refused' }, { op: 'place', id: 'gone', x: 0, y: 0 }] })
+  assert.deepEqual((await get()).body, { lost: [] })
+})
+
+test('canvas_check warns about a lost route placement, with replay ops, but still validates the board', async () => {
+  const before = '{\n"nodes":[\n{"id":"why","type":"text","text":"before","x":0,"y":0,"width":280,"height":140}\n],\n"edges":[]\n}'
+  const { post, check, fs } = harness({ [PATH]: before })
+  await post({ path: PATH, ops: [{ op: 'place', id: 'why', x: 80, y: 40 }] })
+  assert.doesNotMatch((await check()).text, /改动被覆盖/u)
+  fs.put(PATH, before.replace('"before"', '"after"'))
+  const report = (await check()).text
+  assert.match(report, /校验通过.*1 个警告/u)
+  assert.match(report, /用户在 \d\d:\d\d 的 1 个改动被覆盖.*用 edit 恢复或说明原因/u)
+  assert.ok(report.includes('"x":80,"y":40'))
+})
+
+test('journal retains at most the last bounded applied batches, not replays', async () => {
+  const { post, get, fs } = harness()
+  for (let index = 0; index <= BOARD_JOURNAL_LIMIT; index++) {
+    const body = { path: PATH, ops: [{ op: 'addNote', id: `n${index}`, text: 'note', x: 0, y: 400 + index * 100, width: 100, height: 80 }] }
+    await post(body)
+    await post(body)
+  }
+  fs.put(PATH, BOARD)
+  const { lost } = (await get()).body
+  assert.equal(lost.length, BOARD_JOURNAL_LIMIT)
+  assert.equal(lost[0].ops[0].id, 'n1')
 })

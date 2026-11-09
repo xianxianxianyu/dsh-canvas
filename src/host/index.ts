@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
 import { HeadlessBrowser, browserCandidates, locateBrowser } from './browser.ts'
 import { canvasCheckTool } from './check.ts'
+import { BoardJournal } from './board-journal.ts'
 import { canvasCommentTool } from './comment-tool.ts'
 import { CommentStore } from './comments.ts'
 import type { HostContext, SkillCandidate } from './dsh.ts'
@@ -47,6 +48,7 @@ export function apply(ctx: HostContext, config: Config): void {
   const candidates = browserCandidates(process.platform, process.env, homedir())
   // The only writer of comments: the route and canvas_comment share it, so changes to one file run in order.
   const store = new CommentStore(config.root)
+  const journal = new BoardJournal()
   ctx.tools.register(canvasCheckTool({
     fs: ctx.fs,
     workingDirectory: ctx.workingDirectory,
@@ -55,6 +57,7 @@ export function apply(ctx: HostContext, config: Config): void {
     browser: () => locateBrowser(config.browserPath, candidates, existsSync),
     headless,
     store,
+    journal,
   }))
   ctx.tools.register(canvasCommentTool({ fs: ctx.fs, workingDirectory: ctx.workingDirectory, store }))
   ctx.inject(['connection', 'sessions'], scope => {
@@ -63,7 +66,7 @@ export function apply(ctx: HostContext, config: Config): void {
       (scope.sessions.get(id)?.header ?? (await scope.get('sessionPersistence')?.stat(id, { signal }))?.header)?.cwd
     scope.connection.fetch.register(commentsRoute({ store, fs: ctx.fs, sessionCwd }))
     // The person's board edits; the agent edits the same file with DSH's own tools (see board-write.ts).
-    scope.connection.fetch.register(boardRoute({ fs: ctx.fs, sessionCwd }))
+    scope.connection.fetch.register(boardRoute({ fs: ctx.fs, sessionCwd, journal }))
   })
 
   ctx.skills.registerProvider(() => ({

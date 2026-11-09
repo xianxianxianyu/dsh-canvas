@@ -41,9 +41,11 @@ One node or one edge per line, tab indents, exactly like this. The user's board 
 
 The user can move and resize boxes, add notes and arrows, and delete things on the same board; their changes are written into this file.
 
-- Change a board with `edit` (one node's line at a time), not by rewriting the whole file with `write`: a rewrite from memory throws away whatever the user changed since you read it.
-- When `edit` fails with `FS_STALE_VERSION` (`file changed since it was read — re-read the file, then retry`), the user changed the board. `read` it again, keep their changes (their positions, notes and arrows), and redo your edit on the new text.
+- Create a new board with `write`; change an existing board with `edit`, **never a whole-file `write`**. A rewrite from a remembered copy can erase the user's layout, notes and arrows.
+- Keep each edit to the intended fields, using the smallest matching text hunk. DSH 0.2.2-rc.1 defaults `fs-observation-policy` **off**: `edit` applies its hunk to the current file atomically, so a user geometry change and your independent text change can both survive without a re-read. This is not a stale-version guard or a guarantee for overlapping changes. Do not replace a remembered whole node line when you only need to change its text.
+- If the hunk no longer matches, re-read and adapt it to the current board. If an optional `fs-observation-policy` is enabled, a stale `edit` or overwriting `write` instead fails with `FS_STALE_VERSION` (`file changed since it was read — re-read the file, then retry`); re-read, preserve the user's changes, and retry with `edit`. The canvas plugin does not enable that policy globally.
 - Never move a box back to where you put it unless the user asked; their layout wins.
+- The host keeps an in-memory journal of the last 20 active applied user-operation batches per canonical board. `canvas_check` warns when retained intent has been lost, and the owner-only `GET /api/canvas/board` exposes lost operations for restoration. This detects some losses **after they happen**; it cannot prevent a whole-file overwrite or recover evicted history or history from a previous host process. Only applied operations are retained; newer successful user operations supersede older geometry, text or existence intent. A newer placement carries forward omitted width/height from retained placement intent before replacing it. Missing targets and conflicting operations are not reported as lost. Review recovery against the current board rather than blindly replaying old intent. A recovery UI is planned for unit 4c, not available yet.
 
 ## Checking
 

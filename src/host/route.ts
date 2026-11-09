@@ -2,17 +2,19 @@
  * The client's two owner-only routes, each registered as an exact Connection route (DSH lets only
  * owner Peers reach those):
  * - `GET|POST /api/canvas/comments` reads and changes a file's comments;
- * - `POST /api/canvas/board` applies the person's board operations to a `.canvas` file.
+ * - `GET|POST /api/canvas/board` reports lost user intent or applies board operations.
  * Bodies and queries are parsed with zod here; the store, the rules and the write protocol trust
  * what passes.
  */
 import { isAbsolute, win32 } from 'node:path'
 import { z } from 'zod'
-import { boardPostSchema } from '../shared/board-schema.ts'
+import { boardPostSchema, boardQuerySchema } from '../shared/board-schema.ts'
+import { parseBoard } from '../shared/board.ts'
 import { commentsPostSchema, commentsQuerySchema } from '../shared/comment-schema.ts'
 import { SUFFIXES } from '../shared/modes.ts'
 import { resolveArtifact, type Artifact } from './artifact.ts'
-import { MAX_ATTEMPTS, writeBoardOps } from './board-write.ts'
+import { MAX_ATTEMPTS } from './board-write.ts'
+import type { BoardJournal } from './board-journal.ts'
 import { CommentRejected, type CommentStore } from './comments.ts'
 import type { FetchRoute, FileSystem } from './dsh.ts'
 
@@ -31,6 +33,7 @@ export interface RouteDeps extends PathDeps {
 
 export interface BoardRouteDeps extends PathDeps {
   readonly fs: Pick<FileSystem, 'resolve' | 'processPath' | 'stat' | 'readText' | 'writeText'>
+  readonly journal: BoardJournal
 }
 
 class RouteError extends Error {
@@ -110,10 +113,20 @@ export function commentsRoute(deps: RouteDeps): FetchRoute {
 }
 
 async function handleBoard(deps: BoardRouteDeps, request: Request): Promise<Response> {
+  if (request.method === 'GET') {
+    const query = parse(boardQuerySchema, Object.fromEntries(new URL(request.url).searchParams))
+    const artifact = await artifactOf(deps, query, request.signal)
+    if (artifact.mode !== 'board') throw new RouteError(400, `只能查 .canvas 画板：${artifact.path}`)
+    if ((await deps.fs.stat(artifact.target, request.signal))?.type !== 'file') throw new RouteError(404, `找不到文件：${artifact.path}`)
+    const source = await deps.fs.readText(artifact.target, request.signal)
+    const parsed = parseBoard(source)
+    if (!parsed.ok) return Response.json({ error: 'invalid-source', message: `${artifact.path} 现在不是合法的画板`, diagnostics: parsed.diagnostics }, { status: 409, headers: NO_STORE })
+    return Response.json({ lost: deps.journal.lost(artifact.path, source) }, { headers: NO_STORE })
+  }
   const post = parse(boardPostSchema, await bodyOf(request))
   const artifact = await artifactOf(deps, post, request.signal)
   if (artifact.mode !== 'board') throw new RouteError(400, `只能改 .canvas 画板：${artifact.path}`)
-  const outcome = await writeBoardOps(deps.fs, artifact.target, post.ops, request.signal)
+  const outcome = await deps.journal.apply(deps.fs, artifact.target, artifact.path, post.ops, request.signal)
   switch (outcome.kind) {
     case 'done':
       return Response.json({ version: outcome.version, statuses: outcome.statuses }, { headers: NO_STORE })
@@ -131,15 +144,15 @@ async function handleBoard(deps: BoardRouteDeps, request: Request): Promise<Resp
 }
 
 /**
- * The board route: `POST { sessionId?, path, ops }` → `200 { version, statuses }`. Errors answer
- * `{ error: 'bad-request' | 'not-found' | 'invalid-source' | 'busy' | 'internal', message, diagnostics? }`.
+ * `GET { sessionId?, path }` → `{ lost }`; `POST { sessionId?, path, ops }` → `{ version, statuses }`.
+ * Errors answer `{ error: 'bad-request' | 'not-found' | 'invalid-source' | 'busy' | 'internal', message, diagnostics? }`.
  * @param deps - the Session filesystem and Session directories.
  * @returns the route to register with `ctx.connection.fetch`.
  */
 export function boardRoute(deps: BoardRouteDeps): FetchRoute {
   return {
     path: BOARD_PATH,
-    methods: ['POST'],
+    methods: ['GET', 'POST'],
     requestBody: 'buffered',
     async fetch(request) {
       try {

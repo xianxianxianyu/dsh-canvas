@@ -5,6 +5,7 @@ import { join, posix } from 'node:path'
 import test from 'node:test'
 import { canvasCheckTool } from '../src/host/check.ts'
 import { CommentStore } from '../src/host/comments.ts'
+import { BoardJournal } from '../src/host/board-journal.ts'
 import { parseBoard, scene } from '../src/shared/board.ts'
 import { renderDiagram } from '../src/shared/diagram.ts'
 import { boardPageHtml } from '../src/shared/page.ts'
@@ -49,6 +50,7 @@ function harness(files, { headless } = {}) {
     browser: () => ({ kind: 'found', path: '/chrome' }),
     headless: headless ?? recording,
     store: new CommentStore(join(tmpdir(), 'dsh-canvas-no-such-root')),
+    journal: new BoardJournal(),
   })
   return { pages, run: args => tool.execute(args, { signal, agent, callId: 'c1' }) }
 }

@@ -1,11 +1,10 @@
 /**
  * The board write protocol: how the person's operations reach a `.canvas` file the agent may be
- * editing at the same moment. The agent's side needs nothing from this plugin: DSH's
- * fs-observation-policy makes every `edit` and overwriting `write` carry the version the agent last
- * read, so a file the route changed fails the agent's next edit with FS_STALE_VERSION and it
- * re-reads. This module guards the person's side with the same version check and, when it loses,
- * replays the operations on whatever is current. PLAN appendix B 单元 4「写回协议」; unit 4b models
- * exactly the steps numbered below.
+ * editing at the same moment. The route always uses CAS. DSH's optional observation policy also
+ * guards the agent when enabled; otherwise edit applies a hunk under the provider's file lock
+ * and write can replace the entire file. BoardJournal detects replayable lost user intent in
+ * that mode, while canvas-board instructs the agent to edit existing boards. This module guards
+ * the person's side and replays after losing CAS. PLAN appendix B; unit 4b models these steps.
  */
 import { applyBoardOps, type OpStatus } from '../shared/board-ops.ts'
 import type { BoardOp } from '../shared/board-schema.ts'
