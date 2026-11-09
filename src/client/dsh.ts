@@ -14,7 +14,10 @@ export interface DocumentPreviewDefinition {
 export interface DocumentBodyProps {
   /** Complete file bytes for `bytes-complete` renderers; replaced when the file changes. */
   readonly content: { readonly kind: 'bytes'; readonly data: Uint8Array } | { readonly kind: 'text' | 'renderer' }
-  readonly t: (key: string) => string
+  /** The previewed file: `dsh-resource://file/session/<sessionId>/<path>` or `dsh-resource://file/absolute/<path>`. */
+  readonly resourceAddress: string
+  /** Namespace-bound translate; `{name}` in a dictionary entry takes `params.name`. */
+  readonly t: (key: string, params?: Readonly<Record<string, unknown>>) => string
 }
 
 /** The public DSH rc.5 browser services consumed by this plugin. */
