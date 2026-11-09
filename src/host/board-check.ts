@@ -16,6 +16,9 @@ import type { CheckContext, Checked } from './check.ts'
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024
 /** An embedded diagram drawn smaller than this is hard to read. */
 const LEGIBLE_SCALE = 0.5
+/** Warn well before the screenshot limit: a 16k canvas is already hard to read as one image. */
+const MAX_BOARD_SPAN = 16_384
+const MAX_NODE_GAP = MAX_BOARD_SPAN / 2
 
 /** Preparation can only read; the interactive route has no write capability. */
 export type BoardReadContext = Pick<CheckContext, 'path' | 'signal'> & {
@@ -126,11 +129,27 @@ export async function prepareBoard(source: string, context: BoardReadContext): P
   const locate = sourceLocator(source)
   const layoutOf = scene(board)
   const diagnostics: Diagnostic[] = [...parsed.warnings]
+  const distant = new Set<string>()
+  // Axis gaps find separated nodes/clusters without an extra all-pairs scan.
+  for (const [position, size] of [['x', 'width'], ['y', 'height']] as const) {
+    const nodes = board.nodes.filter(node => node.type !== 'group').sort((a, b) => a[position] - b[position])
+    let end = nodes[0]?.[position] ?? 0
+    for (const node of nodes) {
+      if (node[position] - end > MAX_NODE_GAP) distant.add(node.id)
+      end = Math.max(end, node[position] + node[size])
+    }
+  }
+  if (layoutOf.bounds.width > MAX_BOARD_SPAN || layoutOf.bounds.height > MAX_BOARD_SPAN) {
+    const node = board.nodes.reduce<BoardNode | undefined>((outer, node) => outer === undefined || Math.max(node.x + node.width, node.y + node.height) > Math.max(outer.x + outer.width, outer.y + outer.height) ? node : outer, undefined)
+    const { line, column } = locate(source, node === undefined ? 0 : layout.elements.get(node.id)!.start)
+    diagnostics.push({ severity: 'warning', line, column, message: `画板范围太大（${Math.ceil(layoutOf.bounds.width)}×${Math.ceil(layoutOf.bounds.height)} px），先把节点收拢` })
+  }
   const contents = new Map<string, BoardContent>()
   const lines: string[] = []
   for (const node of board.nodes) {
     const { line, column } = locate(layout.elements.get(node.id)!.start)
     const at = (severity: Diagnostic['severity'], message: string): Diagnostic => ({ severity, message, line, column })
+    if (distant.has(node.id)) diagnostics.push(at('warning', `节点 ${node.id} 距离其余节点太远（间隔超过 ${MAX_NODE_GAP} px），先把节点收拢`))
     if (node.type === 'file') {
       const embedded = await embed(context, node)
       contents.set(node.id, embedded.content)

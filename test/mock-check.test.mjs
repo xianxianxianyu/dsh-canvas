@@ -32,6 +32,7 @@ function harness({
       return work({
         async newContext() {
           return {
+            async route() {},
             async newPage() {
               return {
                 async setContent(content) { stats.loads.push(content) },

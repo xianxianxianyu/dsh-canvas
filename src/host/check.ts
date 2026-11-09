@@ -13,7 +13,7 @@ import { checkBoard } from './board-check.ts'
 import type { HeadlessBrowser, BrowserLocation } from './browser.ts'
 import type { CommentStore } from './comments.ts'
 import type { Agent, Attachments, FileSystem, ImageAttachment, Llm, Tool, ToolExecution, WorkingDirectory } from './dsh.ts'
-import { renderMock, screenshot, type Screenshot } from './raster.ts'
+import { imageScale, renderMock, screenshot, type Screenshot } from './raster.ts'
 import type { BoardJournal } from './board-journal.ts'
 
 export type Checked =
@@ -164,7 +164,7 @@ export async function checkFile(deps: CheckDeps, args: CheckArgs, exec: ToolExec
     comments = { kind: 'unreadable', reason: firstLine(error) }
   }
   const picture: Picture = args.image
-    ? await pictureOf(deps, checked.page(outline), `${basename(path)}.png`, exec, mode === 'mock')
+    ? await pictureOf(deps, checked.page(outline), `${basename(path)}.png`, exec, mode)
     : { note: { kind: 'skipped', reason: '本次只校验（image: false）' } }
   if (picture.inspection !== undefined) {
     diagnostics.push(...picture.inspection.diagnostics)
@@ -198,8 +198,14 @@ async function pictureGate(deps: CheckDeps, exec: ToolExecution): Promise<{ read
   return { ok: true, attachments }
 }
 
-async function pictureOf(deps: CheckDeps, page: Page, name: string, exec: ToolExecution, mock: boolean): Promise<Picture> {
+async function pictureOf(deps: CheckDeps, page: Page, name: string, exec: ToolExecution, mode: ModeId): Promise<Picture> {
   const skipped = (reason: string): Picture => ({ note: { kind: 'skipped', reason } })
+  const mock = mode === 'mock'
+  if (imageScale(page.width, page.height) === 0) {
+    return skipped(mode === 'board'
+      ? `画板太大（${page.width}×${page.height}），先把节点收拢`
+      : `页面太大（${page.width}×${page.height}），先缩小页面`)
+  }
   const gate = await pictureGate(deps, exec)
   if (!gate.ok && !mock) return skipped(gate.reason)
   const location = deps.browser()
@@ -208,7 +214,7 @@ async function pictureOf(deps: CheckDeps, page: Page, name: string, exec: ToolEx
   try {
     rendered = await deps.headless.use(location.path, async browser => mock
       ? renderMock(browser, page, exec.signal, gate.ok)
-      : { shot: await screenshot(browser, page, exec.signal) })
+      : { shot: await screenshot(browser, page, exec.signal) }, exec.signal)
   } catch (error) {
     exec.signal.throwIfAborted()
     return skipped(gate.ok ? `无头浏览器截图失败：${firstLine(error)}` : `${gate.reason}；布局检查失败：${firstLine(error)}`)

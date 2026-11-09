@@ -37,6 +37,7 @@ function harness(files, { headless } = {}) {
   const recording = {
     use: async (_path, run) => run({
       newContext: async () => ({
+        route: async () => {},
         newPage: async () => ({ setContent: async html => { pages.push(html) }, screenshot: async () => PNG }),
         close: async () => {},
       }),

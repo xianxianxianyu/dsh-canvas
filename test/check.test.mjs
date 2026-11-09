@@ -98,7 +98,7 @@ test('only canvas suffixes and existing files are checked', async () => {
 function recordingHeadless(pages) {
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64')
   const page = { setContent: async html => { pages.push(html) }, screenshot: async () => png }
-  const browser = { newContext: async () => ({ newPage: async () => page, close: async () => {} }) }
+  const browser = { newContext: async () => ({ route: async () => {}, newPage: async () => page, close: async () => {} }) }
   return { use: async (_path, run) => run(browser) }
 }
 

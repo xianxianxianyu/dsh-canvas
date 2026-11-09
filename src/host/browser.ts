@@ -1,6 +1,19 @@
 import { join, win32 } from 'node:path'
 import type { Browser } from 'playwright-core'
 
+/** Browser launch and a complete render each have a finite wall-clock deadline. */
+export const BROWSER_TIMEOUT_MS = 15_000
+
+/** Race protocol calls that have no Playwright timeout (newContext/newPage/evaluate/close). */
+export function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  const { promise, resolve, reject } = Promise.withResolvers<T>()
+  const abort = (): void => { reject(signal.reason) }
+  signal.addEventListener('abort', abort, { once: true })
+  work.then(resolve, reject).finally(() => { signal.removeEventListener('abort', abort) })
+  if (signal.aborted) abort()
+  return promise
+}
+
 export type BrowserLocation =
   | { readonly kind: 'found'; readonly path: string }
   | { readonly kind: 'missing'; readonly reason: string }
@@ -69,8 +82,9 @@ export class HeadlessBrowser {
    * @param work - the work; the browser stays open until it settles.
    * @returns the work's result.
    */
-  async use<T>(path: string, work: (browser: Browser) => Promise<T>): Promise<T> {
+  async use<T>(path: string, work: (browser: Browser) => Promise<T>, signal?: AbortSignal): Promise<T> {
     if (this.disposed) throw new Error('canvas: the headless browser was disposed')
+    signal?.throwIfAborted()
     clearTimeout(this.timer)
     this.users++
     try {
@@ -78,7 +92,9 @@ export class HeadlessBrowser {
         void this.shut()
         this.current = { path, browser: this.launch(path) }
       }
-      return await work(await this.current.browser)
+      const browser = signal === undefined ? await this.current.browser : await abortable(this.current.browser, signal)
+      signal?.throwIfAborted()
+      return await work(browser)
     } finally {
       if (--this.users === 0 && !this.disposed) {
         this.timer = setTimeout(() => { void this.shut() }, this.idleMs)
@@ -96,7 +112,8 @@ export class HeadlessBrowser {
 
   private launch(path: string): Promise<Browser> {
     const launched = import('playwright-core').then(({ chromium }) => chromium.launch({
-      executablePath: path, headless: true, args: ['--hide-scrollbars', '--force-color-profile=srgb'],
+      executablePath: path, headless: true, timeout: BROWSER_TIMEOUT_MS,
+      args: ['--hide-scrollbars', '--force-color-profile=srgb', '--dns-prefetch-disable', '--disable-preconnect'],
     }))
     const forget = (): void => { if (this.current?.browser === launched) this.current = undefined }
     launched.then(browser => { browser.on('disconnected', forget) }, forget)
@@ -107,6 +124,6 @@ export class HeadlessBrowser {
     const current = this.current
     this.current = undefined
     const browser = await current?.browser.catch(() => undefined)
-    await browser?.close()
+    if (browser !== undefined) await abortable(browser.close(), AbortSignal.timeout(BROWSER_TIMEOUT_MS)).catch(() => undefined)
   }
 }

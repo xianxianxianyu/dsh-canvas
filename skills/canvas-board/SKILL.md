@@ -63,3 +63,9 @@ diagram preview's existing comment UI when an embedded diagram needs discussion.
 ## Checking
 
 `canvas_check` on a board validates the JSON (with `line:column`), the fields, unique ids and that every edge points at a node. It also checks every embedded file: a missing file, or an embedded diagram that does not parse, fails the check with the place to fix (`order.mmd:4:6 …` for a diagram's own error). Warnings (overlaps, cut-off text, a diagram shrunk below half size, a file the board cannot show) do not fail it; fix them anyway unless you have a reason. The picture is the whole board with every embed drawn in place.
+
+Keep the layout compact. A span above 16384 px, or a gap above 8192 px between nodes,
+produces a located warning. Captures never exceed 1302² pixels or 4096 px on either side;
+if even 0.01× cannot fit, the check says `未出图：画板太大…先把节点收拢` instead of
+starting Chrome. Browser rendering has a 15-second deadline; cancellation closes its
+context and releases the browser for idle shutdown. These limits do not make a valid board an error.
