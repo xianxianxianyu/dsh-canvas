@@ -3,3 +3,4 @@ lib/
 .dev/
 /PLAN.md
 *.local.txt
+.audit/
