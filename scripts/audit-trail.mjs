@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 // Reconcile .audit/landing.tsv against reality: every row has 6 cells, and every commit and /tmp
-// path in a row's evidence column exists (commits in this repo or the town repo).
+// path in a row's evidence column exists (commits in this repo or any --repo given).
 // A path written as a prefix (`unit5-*`, `chrome-<run>`) passes when any entry starts with it.
 // Hex ids labelled as sessions or sha256 digests are not commits. Git worktrees (any path ending
 // in a `-wt-<slice>` directory, or listed in --worktrees a,b) are removed by design after merging
 // and are reported, not failed.
-// Usage: node scripts/audit-trail.mjs [trail] [--town <repo>] [--worktrees <a,b>]   Exit 1 when anything is missing.
+// Usage: node scripts/audit-trail.mjs [trail] [--repo <path>]... [--worktrees <a,b>]   Exit 1 when anything is missing.
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { basename, dirname } from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 const args = process.argv.slice(2)
-const townAt = args.indexOf('--town')
-const town = townAt >= 0 ? args[townAt + 1] : undefined
-const trail = args.find((a, i) => !a.startsWith('--') && !['--town', '--worktrees'].includes(args[i - 1])) ?? '.audit/landing.tsv'
+const flags = ['--repo', '--worktrees']
+const repos = ['.', ...args.flatMap((a, i) => (a === '--repo' ? [args[i + 1]] : []))]
+const trail = args.find((a, i) => !a.startsWith('--') && !flags.includes(args[i - 1])) ?? '.audit/landing.tsv'
 const worktreesAt = args.indexOf('--worktrees')
 const worktrees = worktreesAt >= 0 ? args[worktreesAt + 1].split(',') : []
 
@@ -50,7 +50,7 @@ rows.slice(1).forEach((row, i) => {
     if (!/[a-f]/.test(sha) || !/[0-9]/.test(sha)) continue
     if (/(session|sha256)[^;]{0,40}$/i.test(evidence.slice(0, match.index))) continue
     commits++
-    if (!commitExists('.', sha) && !(town && commitExists(town, sha))) problems.push(`${line}: commit ${sha} not found`)
+    if (!repos.some((repo) => commitExists(repo, sha))) problems.push(`${line}: commit ${sha} not found`)
   }
   for (const match of evidence.matchAll(/\/tmp\/[\w./-]+/g)) {
     const path = match[0].replace(/[.,;:)]+$/, '')
