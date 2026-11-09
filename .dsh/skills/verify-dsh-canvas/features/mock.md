@@ -59,3 +59,8 @@ Preconditions:
 - The attachment PNG lives in the real session's attachment store, not in text-only tool events. Use `capture-ui.mjs` for UI runs and look at the copied images; an agent's description is not evidence.
 - A changed visible label can intentionally cause a drift warning even if its id remains stable. The user can resolve the addressed comment after checking the changed copy.
 - Keep the mock to one screen. Vertical scrolling or a responsive desktop redesign is not silently substituted for the mobile check.
+- Sanitization accepts only a re-parsed/re-sanitized fixed point (at most four rounds). Test mutation-XSS with a real TCP listener plus a positive control, not only HTTP requests; both preview and capture must make zero connections, contain no live iframe/refresh/handler, warn, and still attach a PNG.
+- Mock trees may be at most 256 levels deep, including wrappers/templates. Excess nesting is a located refusal rather than a stack overflow. Anchors use the shared 200-unit id limit; long labels remain visible and only comment snapshots are truncated to 500 UTF-16 units.
+- Authored `id`/`name` values such as `defaultView`, `body` and `elementFromPoint` remain intact. Parent inspection/picking must use unclobberable native DOM access; prove both actual element picking and the check's PNG.
+- Mock controls and the element-specific comment hint occupy a row above the viewport, unlike the diagram overlay. Measure toolbar bottom against frame top and inspect a screenshot. Comment helpers locate the toolbar in the sidebar, not inside the mock's drawing pane.
+- `capture-ui.mjs` replaces its own previous read-only PNG exports on reruns; it never modifies the attachment store. Repeated capture must work after additional turns.

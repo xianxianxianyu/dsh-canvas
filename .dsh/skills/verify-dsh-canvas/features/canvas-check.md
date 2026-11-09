@@ -58,3 +58,5 @@ The prompts below are verbatim.
 - `deepseek-v4-pro` cannot see images. Never use it to prove `check-image`.
 - `canvas_check` starts its own headless Chrome through playwright, with a temporary `playwright_chromiumdev_profile-*` profile. It closes after 60 s idle or when dsh exits. Tests and other runs use the same kind of process, so never kill those by name.
 - A missing browser is not a failure. The check passes and says why there is no picture.
+- Empty or unknown diagram headers report 1:1; unlocated limit errors use the header line. Preserve Pele's precise source positions where available. A valid-but-unsupported screenshot size remains a passing check with a specific no-image reason, not an unlocated parser error.
+- A diagram id over the shared 200 UTF-16-unit bound fails with a location. Long visible labels remain valid; commenting snapshots only the first 500 units.

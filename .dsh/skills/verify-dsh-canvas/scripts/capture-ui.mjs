@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Export real tool records and canvas PNGs from sessions this UI run created. Read-only to DSH;
 // output is confined to the existing evidence run. Usage: capture-ui.mjs <run-dir>
-import { copyFileSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { copyFileSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { zstdDecompressSync } from 'node:zlib'
 import { DEV_DATA, runSessions } from './dev-ui.mjs'
@@ -36,6 +36,8 @@ for (const sessionId of sessions) {
       const hex = /^sha256:([a-f0-9]{64})$/u.exec(block.attachment.attachmentId)?.[1]
       if (!hex || block.attachment.mediaType !== 'image/png') throw new Error('Unexpected canvas image attachment')
       const file = `check-${n}${entry.images.length ? `-${entry.images.length + 1}` : ''}.png`
+      // Attachment copies inherit the store's read-only mode; replace our prior export on reruns.
+      rmSync(join(run, file), { force: true })
       copyFileSync(join(DEV_DATA, 'home', 'attachments', 'v1', 'objects', hex.slice(0, 2), hex), join(run, file))
       entry.images.push({ file, width: block.attachment.width, height: block.attachment.height, sha256: hex })
     }

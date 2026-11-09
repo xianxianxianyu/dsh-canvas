@@ -40,8 +40,8 @@ export const SEL = {
   /** dsh-canvas's error view, which replaces the preview while the file does not parse (comment alerts inside the preview are not it). */
   previewError: '[data-slot="sidebar.right.pane.tab"] [role="alert"]:not([data-canvas-preview] *)',
   /** Comment mode toggle (button 批注), and the side list toggle (button 批注列表, its text ☰ and the pending count). */
-  commentMode: '[data-canvas-preview] button[aria-label="批注"]',
-  commentList: '[data-canvas-preview] button[aria-label="批注列表"]',
+  commentMode: '[data-slot="sidebar.right.pane.tab"] button[aria-label="批注"]',
+  commentList: '[data-slot="sidebar.right.pane.tab"] button[aria-label="批注列表"]',
   /** The side list; each thread in it is [data-canvas-thread="<id>"] with data-status. */
   comments: '[data-canvas-comments]',
   /** The form that opens on a clicked node in comment mode. */
@@ -188,15 +188,16 @@ export async function chooseRenderer(tab, name) {
  */
 export async function comments(tab) {
   return tab.evaluate(sel => {
-    const pane = document.querySelector(sel.preview)
+    const pane = [...document.querySelectorAll(sel.preview)].find(element => element.checkVisibility())
     if (!pane) return null
+    const controls = pane.parentElement
     const text = element => element ? element.textContent.trim() : null
     const draft = pane.querySelector(sel.draft)
-    const list = document.querySelector(sel.comments)
+    const list = [...document.querySelectorAll(sel.comments)].find(element => element.checkVisibility())
     return {
       commenting: pane.hasAttribute('data-canvas-commenting'),
-      hint: text(pane.querySelector('[role="status"]')),
-      pending: Number(text(pane.querySelector('button[aria-label="批注列表"]'))?.replace(/\D/g, '')),
+      hint: text(controls.querySelector('[role="status"]')),
+      pending: Number(text(controls.querySelector('button[aria-label="批注列表"]'))?.replace(/\D/g, '')),
       pins: [...pane.querySelectorAll('[data-canvas-pin]')].map(pin => ({ node: pin.dataset.canvasPin, label: pin.getAttribute('aria-label'), count: Number(pin.textContent) })),
       draft: draft && { title: text(draft.firstElementChild), text: draft.querySelector('textarea').value, placeholder: draft.querySelector('textarea').placeholder },
       list: list && {
@@ -233,7 +234,7 @@ const press = (tab, key) => tab.run(async ({ page }, name) => { await page.keybo
 /** The board's visible geometry and feedback, not a private React store. */
 export async function board(tab) {
   return tab.evaluate(() => {
-    const root = document.querySelector('[data-canvas-board]')
+    const root = [...document.querySelectorAll('[data-canvas-board]')].find(element => element.checkVisibility())
     if (!root) return null
     const rect = el => el.getBoundingClientRect().toJSON()
     return {

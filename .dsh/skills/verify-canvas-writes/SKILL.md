@@ -14,8 +14,8 @@ acknowledged change, not whether a parser accepts arbitrary input.
 ## Coverage and synchronization
 
 **Source synchronization:** canvas same-commit subject
-`fix(board): bound drag work and cache loss inspections` (indexed source locations,
-batched field edits and snapshot-keyed loss caching; publication/field rules unchanged); DSH source
+`test(integrate): verify merged adversarial fixes` (merged board-core, contracts,
+raster and mock; indexed parsing, per-field intent and publication mappings reconfirmed); DSH source
 `b830ec950faba0a46dda564be3e2d854afed94f1` (rc.5). The model, all configurations,
 scratch controls and recorded results were rerun together. The installed 0.2.2-rc.1 P1
 probe found the observation policy disabled, unlike that source default. Thus
