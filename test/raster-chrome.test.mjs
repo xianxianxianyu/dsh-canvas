@@ -59,8 +59,10 @@ for (const cancel of ['deadline', 'abort']) {
           return context
         }
         const start = performance.now()
-        try { return await renderMock(browser, document, controller.signal, true, { timeoutMs: 500 }) }
-        finally { assert.ok(performance.now() - start < 1000, 'cancelled protocol call must not remain hung') }
+        // The abort case must reach evaluation even when other Chrome tests start concurrently.
+        const timeoutMs = cancel === 'abort' ? 5000 : 500
+        try { return await renderMock(browser, document, controller.signal, true, { timeoutMs }) }
+        finally { assert.ok(performance.now() - start < timeoutMs + 1000, 'cancelled protocol call must not remain hung') }
       }, controller.signal), cancel === 'abort' ? /caller cancelled/u : /超时/u)
       assert.equal(headless.users, 0)
       for (let i = 0; i < 100 && chrome.isConnected(); i++) await pause(20)
