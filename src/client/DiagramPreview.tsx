@@ -84,9 +84,13 @@ function onScreen(view: View, box: Box): { readonly left: number; readonly top: 
 
 interface Draft { readonly id: string; readonly node: DiagramNode; readonly text: string; readonly saving: boolean }
 
-/** Client-minted comment id: time, then randomness, within the store's `[A-Za-z0-9_-]{1,64}`. */
+/**
+ * Client-minted comment id: time, then randomness, within the store's `[A-Za-z0-9_-]{1,64}`.
+ * `crypto.randomUUID` exists only in secure contexts, and DSH web may be served over plain http.
+ */
 function newCommentId(): string {
-  return `u-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`
+  const random = Array.from(crypto.getRandomValues(new Uint8Array(4)), byte => byte.toString(16).padStart(2, '0')).join('')
+  return `u-${Date.now().toString(36)}-${random}`
 }
 
 /**
