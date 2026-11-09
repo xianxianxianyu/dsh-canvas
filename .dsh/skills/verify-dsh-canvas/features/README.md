@@ -6,7 +6,7 @@ This directory maps what a dsh-canvas user can see and do, with a recipe for dri
 
 - `pnpm build` has run in this checkout, and `node $SKILL/scripts/doctor.mjs` printed `doctor: ready`. Its default-off `fs-observation-policy` warning is not failure; do not enable the policy globally. Doctor and headless runner accept repeatable `--patch <path>` for explicit temporary-overlay journeys.
 - Every journey has its own evidence directory `$OUT/<run>`, where `OUT` is `$CANVAS_VERIFY_OUT` or `/tmp/dsh-canvas-verify`. Never reuse a run directory.
-- Dev UI journeys need the `canvas-dev` server on port 3996, started by you in this run (omp service `canvas-dev-3996`), and a tab from `ui.open(browser, { url, run })`.
+- Dev UI journeys need your own `canvas-dev` server on the selected `PORT` (default 3996), and a tab from `ui.open(browser, { url, run })`. If another project holds the default, choose a free port with `PORT=` and use that same setting for doctor/cleanup; never stop the other listener.
 - Headless journeys need nothing running, except where they call a route (`comments-route.mjs` or `board-route.mjs`), which needs that server. Each `run-headless.mjs` call is self-contained. Board-loss checks instead need the agent and route in one host process, preferably canvas-dev: a separate headless process cannot see its in-memory board journal, even with a shared canvas root.
 - Never drive a server you did not start, or the user's desktop app.
 
@@ -42,8 +42,4 @@ Each feature file opens with an H1 title and one paragraph on what the user sees
 - [Comments](./comments.md): the user pins comments on diagram nodes in the sidebar; 看批注 makes the agent see them in `canvas_check` (listed and framed), fix the chart and reply with `canvas_comment`. Covers the owner-only route, the agent's permission limit, comment mode, the list and its filters, a bottom drawer below 640 px tab width with full-width drawing above it, resolve and reopen, delete, drift warnings, and state kept across file reloads.
 - [Interactive board and write path](./board.md): real `.canvas` tab with sandboxed diagram/Markdown/image nodes, group frames, shared geometry, drag/resize, note creation/editing, labelled connections and deletion. Covers per-op outcomes, retry, invalid-source read-only/repair, authoritative file refresh, concurrent agent edits and explicit lost-batch reapply/dismiss. The owner route and composite PNG are checked separately. Default policy-off permits a destructive stale whole-file write; the bounded same-host journal detects retained loss, not prevention or durable undo. Temporary policy-on controls test rejection of stale edit and write.
 
-## Not mapped yet
-
-Each unit that adds a feature adds its file here, together with its live check:
-
-- **Mock (unit 5).** `*.mock.html` in a static sandbox, element comments, and screenshots with and without Chrome.
+- [Static UI mock](./mock.md): compound `.mock.html` suffix, static HTML/CSS sandbox, viewport markers and desktop/mobile switching, zoom, element comments/pins/outlines/drift, Chrome overflow warnings and shared PNG, plus missing-browser static-only checks.

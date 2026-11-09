@@ -21,6 +21,8 @@ export const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chr
  * desktop app or another profile.
  */
 export const DEV_DATA = resolve(process.env.CANVAS_DEV_DATA || join(homedir(), '.cache', 'dsh-canvas-dev'))
+/** Same override and default as scripts/dev-server.sh; share it with doctor and cleanup. */
+export const DEV_PORT = process.env.PORT || '3996'
 
 export const SEL = {
   /** 预览版说明: shown once per profile until 继续 is pressed. */
@@ -30,16 +32,16 @@ export const SEL = {
   replyPrompt: 'role/textbox[name="发消息或创建任务, / 调用指令, @ 文件或对话"]',
   /** The session on screen: its row in the left tree, keyed `session:<id>`. */
   currentRow: '[role="treeitem"][aria-selected="true"][data-row-key^="session:"]',
-  /** The right sidebar's renderer menu (图 / 纯文本); the chat header has other 打开方式 buttons. */
+  /** The sidebar's renderer menu (图 / 界面稿 / 纯文本); the chat header has other 打开方式 buttons. */
   rendererMenu: '[data-slot="sidebar.right.pane.tab"] button[aria-label="打开方式"]',
   /** dsh-canvas's preview: a sandboxed srcdoc iframe inside this element. */
-  preview: '[data-canvas-diagram]',
-  previewFrame: '[data-canvas-diagram] iframe',
+  preview: '[data-canvas-preview]',
+  previewFrame: '[data-canvas-preview] iframe',
   /** dsh-canvas's error view, which replaces the preview while the file does not parse (comment alerts inside the preview are not it). */
-  previewError: '[data-slot="sidebar.right.pane.tab"] [role="alert"]:not([data-canvas-diagram] *)',
+  previewError: '[data-slot="sidebar.right.pane.tab"] [role="alert"]:not([data-canvas-preview] *)',
   /** Comment mode toggle (button 批注), and the side list toggle (button 批注列表, its text ☰ and the pending count). */
-  commentMode: '[data-canvas-diagram] button[aria-label="批注"]',
-  commentList: '[data-canvas-diagram] button[aria-label="批注列表"]',
+  commentMode: '[data-canvas-preview] button[aria-label="批注"]',
+  commentList: '[data-canvas-preview] button[aria-label="批注列表"]',
   /** The side list; each thread in it is [data-canvas-thread="<id>"] with data-status. */
   comments: '[data-canvas-comments]',
   /** The form that opens on a clicked node in comment mode. */

@@ -14,11 +14,10 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { parse } from 'yaml'
-import { DEV_DATA } from './dev-ui.mjs'
+import { DEV_DATA, DEV_PORT } from './dev-ui.mjs'
 import { DSH_BIN, OUT, PROFILE, REPO, dshEnv, linkState } from './run-headless.mjs'
 
 const DEV_PROFILE = 'canvas-dev'
-const DEV_PORT = 3996
 const live = !process.argv.includes('--no-live')
 const extraPatches = []
 for (let i = 2; i < process.argv.length; i++) {
@@ -105,7 +104,7 @@ for (const [name, creator] of [[DEV_PROFILE, 'scripts/dev-server.sh'], [PROFILE,
   }
 }
 
-// 4. Port 3996 must be free, or held by a canvas-dev server; anything else is not ours to drive.
+// 4. The selected PORT must be free, or held by canvas-dev; another project is never ours to drive.
 // 4b. canvas-dev keeps its session store, storages, attachments and canvas root in DEV_DATA, through
 // the dev.patch.yml that scripts/dev-server.sh writes there. Every DSH process loads
 // storages/workspace.json once and rewrites it whole, so a canvas-dev server booted without that
