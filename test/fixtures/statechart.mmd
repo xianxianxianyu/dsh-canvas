@@ -1,0 +1,13 @@
+stateDiagram-v2
+  [*] --> s1
+  s1: 购物车
+  s2: 支付中
+  s3: 支付失败
+  s4: 已支付
+  s1 --> s2: 你点击支付
+  s2 --> s4: 支付成功
+  s2 --> s3: 银行拒绝
+  s3 --> s1: 返回购物车
+  class s1 teal
+  class s2 bugPath
+  class s3 breaks
