@@ -175,8 +175,8 @@ function main() {
   const work = options.cwd === undefined ? join(run, 'work') : resolve(options.cwd)
   const state = join(run, 'state')
   const canvasRoot = options.canvasRoot === undefined ? join(state, 'canvas') : resolve(options.canvasRoot)
-  mkdirSync(work, { recursive: true })
-  mkdirSync(canvasRoot, { recursive: true })
+  // With --cwd and --canvas-root both given, nothing else would create the run directory.
+  for (const dir of [run, work, canvasRoot]) mkdirSync(dir, { recursive: true })
   const patch = join(run, 'run.patch.yml')
   writeFileSync(patch, runPatch({ model: options.model, state, canvasRoot, noBrowser: options.noBrowser }))
   writeFileSync(join(run, 'prompt.txt'), options.prompt)
