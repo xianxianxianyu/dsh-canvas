@@ -1,0 +1,6 @@
+# canvas_check, the canvas-* skills, and the diagram preview in the right sidebar.
+- insert:
+    - id: canvas
+      name: dsh-canvas
+      config:
+        root: !!js dshHomePath('canvas')

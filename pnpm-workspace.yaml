@@ -1,0 +1,3 @@
+# Standalone plugin; esbuild installs its platform executable.
+allowBuilds:
+  esbuild: true

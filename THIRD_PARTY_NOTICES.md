@@ -1,0 +1,161 @@
+# Third-party notices
+
+Copyright (C) 2026 xianxianxianyu. dsh-canvas as a whole, including its original code and documentation, is licensed under **AGPL-3.0-or-later**; see [LICENSE](LICENSE). This does not remove or replace the upstream notices and permissions below.
+
+## pele 1.13.0 — MIT
+
+- Upstream: <https://github.com/obsidianmd/pele>
+- Author: kepano.
+- Locked version: `1.13.0` in `pnpm-lock.yaml`.
+- Bundled use: `src/shared/diagram.ts` imports `pele` to parse and render Mermaid text; esbuild includes it in both `lib/index.js` (host) and `lib/client.js` (browser). `src/shared/diagram.ts` also adapts pele's built-in label width table so the browser and the host produce the same SVG. pele has no production dependencies.
+- License source: the `pele` 1.13.0 package's `LICENSE`, reproduced verbatim below, including the Lucide notice it carries for its zoom-control icon.
+
+```text
+MIT License
+
+Copyright (c) 2026 kepano
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+The reset icon of the zoom controls is "rotate-ccw" from Lucide v1.14.0
+(https://lucide.dev), under the ISC License:
+
+Copyright (c) 2026 Lucide Icons and Contributors
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+```
+
+## playwright-core 1.65.0 — Apache-2.0
+
+- Upstream: <https://github.com/microsoft/playwright>
+- Author: Microsoft Corporation.
+- Locked version: `1.65.0` in `pnpm-lock.yaml`.
+- Runtime use: a production dependency, not bundled. `src/host/browser.ts` imports it on first use to drive an installed Chrome or Edge for screenshots; it never downloads a browser. The installed package carries its full `LICENSE` (Apache License 2.0, <https://www.apache.org/licenses/LICENSE-2.0>), `NOTICE` and `ThirdPartyNotices.txt`. Its `NOTICE` file reads:
+
+```text
+Playwright
+Copyright (c) Microsoft Corporation
+
+This software contains code derived from the Puppeteer project (https://github.com/puppeteer/puppeteer),
+available under the Apache 2.0 license (https://github.com/puppeteer/puppeteer/blob/master/LICENSE).
+```
+
+## yaml 2.9.1 — ISC
+
+- Upstream: <https://github.com/eemeli/yaml>
+- Author: Eemeli Aro.
+- Locked version: `2.9.1` in `pnpm-lock.yaml`.
+- Bundled use: `src/host/index.ts` imports `yaml` to parse skill front matter; esbuild includes it in the generated `lib/index.js`. `yaml` has no production dependencies.
+- License source: the `yaml` 2.9.1 package's `LICENSE`, reproduced verbatim below. Its original contact address is retained as part of the required notice.
+
+```text
+Copyright Eemeli Aro <eemeli@gmail.com>
+
+Permission to use, copy, modify, and/or distribute this software for any purpose
+with or without fee is hereby granted, provided that the above copyright notice
+and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+```
+
+## pstack — MIT
+
+- Upstream: <https://github.com/cursor/plugins/tree/main/pstack>
+- Author: Lauren Tan ([poteto](https://x.com/poteto)).
+- License source: upstream `pstack/LICENSE`, reproduced verbatim below.
+- Derived materials: the light and dark statechart palette in `src/shared/page.ts` (group colors and the `breaks`, `mayBreak`, `bugPath` and `repeats` marks) comes from the statechart skill's `references/render.md`; the state-chart conventions in `skills/canvas-diagram/SKILL.md` summarize that skill.
+
+```text
+MIT License
+
+Copyright (c) 2026 Lauren Tan
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## DeepSeek Harness (DSH) — MIT
+
+- Upstream: <https://github.com/deepseek-ai/deepseek-harness>
+- Author: DeepSeek.
+- License source: upstream root `LICENSE`, reproduced verbatim below.
+- Derived integration material: `src/host/dsh.ts` and `src/client/dsh.ts` describe the DSH interfaces used by this plugin; `imageRoute` in `src/host/check.ts` follows the image-capability gate of DSH's `read_image` tool, and path resolution follows its file tools. This is an adapter, not a vendored copy of the DSH runtime.
+
+```text
+MIT License
+
+Copyright (c) 2026 DeepSeek
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## Build and host dependency boundary
+
+`scripts/build.mjs` bundles the plugin's own source plus pele and yaml as described above. React and its JSX runtime are external browser modules supplied by DSH; DSH packages and playwright-core remain external in the host build. esbuild, TypeScript, Node/React type declarations, and their development dependencies are build tools, not code embedded into the plugin's runtime bundles. Their packages retain their own license files when installed. If a future change bundles another dependency, its applicable notice must accompany the resulting distribution.
+
+The full, unmodified AGPL version-3 text in [LICENSE](LICENSE) is from <https://www.gnu.org/licenses/agpl-3.0.txt>, headed “Version 3, 19 November 2007”; the project's grant permits version 3 **or any later version**.
