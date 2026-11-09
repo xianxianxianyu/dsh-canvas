@@ -301,18 +301,21 @@ function Viewport({ address, page, scheme, nodes, threads, comments, t }: {
           <button type="submit" disabled={saving || !draft.text.trim()} style={{ ...button, background: red, color: '#fff', opacity: saving || !draft.text.trim() ? 0.5 : 1 }}>{t('comment.send')}</button>
         </div>
       </form>}
-      <div data-canvas-ui style={{ ...bar, left: 8, top: 8 }}>
-        <button type="button" aria-pressed={commenting} title={t('comment.modeHint')} aria-label={t('comment.mode')} onClick={() => {
-          setCommenting(on => !on)
-          setDraft(undefined)
-          pane.current?.focus({ preventScroll: true })
-        }} style={{ ...button, background: commenting ? red : 'transparent', color: commenting ? '#fff' : 'inherit' }}>💬 {t('comment.mode')}</button>
-        <button type="button" aria-pressed={listOpen} aria-label={t('comment.list')} title={t('comment.list')} onClick={() => { setListOpen(open => !open) }} style={button}>
-          ☰ {pending}
-        </button>
+      {/* The comment controls, the mode hint and the route error stack at the top left; the zoom bar keeps the bottom right, however narrow the pane. */}
+      <div style={{ position: 'absolute', left: 8, top: 8, right: 8, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4, pointerEvents: 'none' }}>
+        <div data-canvas-ui style={{ ...bar, position: 'static', pointerEvents: 'auto' }}>
+          <button type="button" aria-pressed={commenting} title={t('comment.modeHint')} aria-label={t('comment.mode')} onClick={() => {
+            setCommenting(on => !on)
+            setDraft(undefined)
+            pane.current?.focus({ preventScroll: true })
+          }} style={{ ...button, background: commenting ? red : 'transparent', color: commenting ? '#fff' : 'inherit' }}>💬 {t('comment.mode')}</button>
+          <button type="button" aria-pressed={listOpen} aria-label={t('comment.list')} title={t('comment.list')} onClick={() => { setListOpen(open => !open) }} style={button}>
+            ☰ {pending}
+          </button>
+        </div>
+        {commenting && <div data-canvas-ui role="status" style={{ ...bar, position: 'static', pointerEvents: 'auto', padding: '4px 10px', fontSize: 12 }}>{t('comment.modeHint')}</div>}
+        {comments.state.status === 'failed' && <div data-canvas-ui role="alert" style={{ ...bar, position: 'static', pointerEvents: 'auto', padding: '4px 10px', fontSize: 12, color: red }}>{t('comment.unavailable', { error: comments.state.error })}</div>}
       </div>
-      {commenting && <div data-canvas-ui role="status" style={{ ...bar, left: '50%', bottom: 8, transform: 'translateX(-50%)', padding: '4px 10px', fontSize: 12 }}>{t('comment.modeHint')}</div>}
-      {comments.state.status === 'failed' && <div data-canvas-ui role="alert" style={{ ...bar, left: 8, bottom: 8, padding: '4px 10px', fontSize: 12, color: red }}>{t('comment.unavailable', { error: comments.state.error })}</div>}
       <div data-canvas-ui style={{ ...bar, right: 8, bottom: 8 }}>
         <button type="button" style={button} title={t('zoomOut')} aria-label={t('zoomOut')} onClick={() => { center(1 / 1.25) }}>−</button>
         <button type="button" style={button} title={t('actual')} aria-label={t('actual')} onClick={() => { center(1 / view.scale) }}>{Math.round(view.scale * 100)}%</button>

@@ -141,3 +141,22 @@ test('re-reading the file keeps the list, comment mode, the draft, the view and 
     assert.equal(await page.getByRole('button', { name: '原始大小', exact: true }).textContent(), zoom, 'the zoom stays')
   })
 })
+
+test('with the list open, the comment-mode hint stays clear of the zoom controls', { skip }, async () => {
+  await withPreview(async page => {
+    await page.getByRole('button', { name: '批注列表', exact: true }).click()
+    await page.keyboard.press('c')
+    const boxes = await page.evaluate(() => {
+      const pane = document.querySelector('[data-canvas-diagram]')
+      const rect = element => { const { left, top, right, bottom } = element.getBoundingClientRect(); return { left, top, right, bottom } }
+      return {
+        hint: rect(pane.querySelector('[role="status"]')),
+        zoom: rect(pane.querySelector('button[aria-label="放大"]').parentElement),
+        toolbar: rect(pane.querySelector('button[aria-label="批注"]').parentElement),
+      }
+    })
+    const overlap = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
+    assert.equal(overlap(boxes.hint, boxes.zoom), false, `hint ${JSON.stringify(boxes.hint)} overlaps zoom ${JSON.stringify(boxes.zoom)}`)
+    assert.equal(overlap(boxes.hint, boxes.toolbar), false, `hint ${JSON.stringify(boxes.hint)} overlaps the toolbar ${JSON.stringify(boxes.toolbar)}`)
+  })
+})
