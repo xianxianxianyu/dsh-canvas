@@ -19,11 +19,26 @@ test('a broken arrow is located at its line and column with the source line', as
   assert.ok(!problem.message.includes('\n'), 'the snippet is not repeated inside the message')
 })
 
-test('text that is no diagram fails without a position', () => {
-  const outcome = renderDiagram('hello world')
-  assert.equal(outcome.ok, false)
-  assert.deepEqual(outcome.diagnostics, [{ severity: 'error', message: 'No diagram type detected for the given text.' }])
-})
+for (const [name, source, line, column] of [
+  ['empty', '', 1, 1],
+  ['unknown header', 'hello', 1, 1],
+  ['valid gantt control', 'gantt\n    title x', null, null],
+  ['broken flow edge', 'flowchart LR\nA -->', 2, 1],
+  ['broken state edge', 'stateDiagram-v2\n[*]-->', 2, 1],
+  ['edge limit', 'flowchart LR\n' + 'A-->B\n'.repeat(10001), 1, 1],
+  ['edge limit after comments', '\n%% comment\n  flowchart LR\n' + 'A-->B\n'.repeat(10001), 3, 1],
+]) {
+  test(`F7 every invalid diagram is located: ${name}`, () => {
+    const outcome = renderDiagram(source)
+    if (line === null) {
+      assert.equal(outcome.ok, true, 'the adversary corpus also includes a valid gantt control')
+      return
+    }
+    assert.equal(outcome.ok, false)
+    assert.equal(outcome.diagnostics[0].line, line)
+    assert.ok(outcome.diagnostics[0].column >= column)
+  })
+}
 
 test('a valid chart renders to SVG that keeps Mermaid ids and classes on its nodes', async () => {
   const outcome = renderDiagram(await fixture('statechart.mmd'))

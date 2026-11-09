@@ -7,6 +7,8 @@ description: "Draw a Mermaid diagram in a .mmd file that the user sees rendered 
 
 A diagram is a plain Mermaid file: `name.mmd` (or `.mermaid`). Write only Mermaid text: no Markdown fences, no `%%{init}%%` block. The renderer is pele, which supports the common Mermaid diagrams (flowchart, stateDiagram-v2, sequenceDiagram, classDiagram, erDiagram, and more) and ignores Mermaid themes; canvas supplies the colors.
 
+Invalid diagrams always report a line and column. If pele cannot locate the error, empty or unknown headers report `1:1`; diagram-size and edge-limit errors point at the diagram header line.
+
 ## Make it readable
 
 - Draw one question per chart. Aim for about 20 arrows or fewer; past that, split the chart or merge states that act the same.

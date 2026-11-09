@@ -1,4 +1,4 @@
-import { PeleError, render, type RenderOptions, type TextMeasurer } from 'pele'
+import { detectType, PeleError, render, type RenderOptions, type TextMeasurer } from 'pele'
 import type { Diagnostic } from './report.ts'
 
 /** Label font for every diagram, in the client preview and in the host screenshot alike. */
@@ -84,7 +84,7 @@ export const DIAGRAM_OPTIONS: RenderOptions = {
 /**
  * Render Mermaid text with pele, or locate why it cannot be drawn.
  * @param source - the file's text.
- * @returns the SVG, or diagnostics with line, column and snippet when pele knows them.
+ * @returns the SVG, or located diagnostics (the header for limits, 1:1 for unknown/empty input).
  * @throws anything other than a PeleError, which would be a pele defect.
  */
 export function renderDiagram(source: string): DiagramOutcome {
@@ -93,15 +93,15 @@ export function renderDiagram(source: string): DiagramOutcome {
     return { ok: true, svg: result.svg, width: result.width, height: result.height, kind: result.mermaidType }
   } catch (error) {
     if (!(error instanceof PeleError)) throw error
-    return { ok: false, diagnostics: [diagnosticOf(error)] }
+    return { ok: false, diagnostics: [diagnosticOf(error, source)] }
   }
 }
 
-function diagnosticOf(error: PeleError): Diagnostic {
+function diagnosticOf(error: PeleError, source: string): Diagnostic {
   // pele repeats the snippet inside its message; keep it once, in `snippet`.
   const message = (error.snippet ? error.message.replace(error.snippet, '') : error.message)
     .split('\n').map(line => line.trim()).filter(Boolean).join(' ')
-  return error.line > 0
-    ? { severity: 'error', message, line: error.line, column: Math.max(error.column, 1), ...error.snippet ? { snippet: error.snippet } : {} }
-    : { severity: 'error', message }
+  const line = error.line > 0 ? error.line : error.code === 'limit'
+    ? Math.max(1, source.split('\n').findIndex(line => detectType(line) !== null) + 1) : 1
+  return { severity: 'error', message, line, column: Math.max(error.column, 1), ...error.snippet ? { snippet: error.snippet } : {} }
 }
