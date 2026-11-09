@@ -30,3 +30,15 @@ test('the dark page swaps the whole palette and never loads scripts or the netwo
   assert.match(page.html, /<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">/u)
   assert.ok(!/<script/iu.test(page.html))
 })
+
+test('outlined nodes get a dashed frame in the comment color; ids are escaped inside the selector', () => {
+  const plain = pageHtml({ markup: svg, width: 120, height: 80 }, 'light')
+  assert.ok(!plain.html.includes('outline:'), 'no outline unless asked')
+  const light = pageHtml({ markup: svg, width: 120, height: 80 }, 'light', { outline: ['s3', 'odd"</style><script>'] })
+  assert.ok(light.html.includes(`.pele .pele-node:is([data-id="s3"],[data-id="odd\\"\\3c /style\\3e \\3c script\\3e "]){outline:2.5px dashed ${THEMES.light.comment};outline-offset:5px}`))
+  assert.equal(light.html.match(/<\/style>/gu).length, 1, 'an id cannot close the style element')
+  assert.ok(!/<script/iu.test(light.html))
+  const dark = pageHtml({ markup: svg, width: 120, height: 80 }, 'dark', { outline: ['s3'] })
+  assert.ok(dark.html.includes(`{outline:2.5px dashed ${THEMES.dark.comment};outline-offset:5px}`))
+  assert.equal(pageHtml({ markup: svg, width: 120, height: 80 }, 'light', { outline: [] }).html, plain.html)
+})

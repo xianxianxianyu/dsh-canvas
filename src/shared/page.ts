@@ -18,6 +18,8 @@ interface Theme {
   readonly mayBreak: { readonly fill: string; readonly stroke: string; readonly text: string }
   readonly bugPath: string
   readonly repeats: string
+  /** The dashed frame around nodes with pending comments, in the preview and the model's picture. */
+  readonly comment: string
 }
 
 // The statechart palette from pstack's statechart skill, references/render.md (MIT, © 2026 Lauren Tan).
@@ -29,6 +31,7 @@ export const THEMES: { readonly [S in Scheme]: Theme } = {
     mayBreak: { fill: '#fff3e6', stroke: '#e8730c', text: '#b85a06' },
     bugPath: '#1680f3',
     repeats: '#9b35d6',
+    comment: '#e5484d',
   },
   dark: {
     pele: { bg: '#1f1f1f', fg: '#f5f5f5', muted: '#acacac', line: '#939393', surface: '#121212', 'surface-alt': '#2c2c2c', border: '#4e4e4e' },
@@ -37,6 +40,7 @@ export const THEMES: { readonly [S in Scheme]: Theme } = {
     mayBreak: { fill: '#2e2619', stroke: '#d0700f', text: '#ffa257' },
     bugPath: '#116dd2',
     repeats: '#9a3fcf',
+    comment: '#ec5d5e',
   },
 }
 
@@ -69,14 +73,29 @@ export interface Page {
   readonly background: string
 }
 
+export interface PageOptions {
+  /** Node ids (pele's `data-id`) to frame with a dashed outline: the nodes with pending comments. */
+  readonly outline?: readonly string[]
+}
+
+/** A CSS string literal that cannot end the string or the enclosing `<style>` element. */
+function cssString(value: string): string {
+  return `"${value.replace(/[\\"<>\n\r\f]/gu, character => character === '\\' || character === '"' ? `\\${character}` : `\\${character.charCodeAt(0).toString(16)} `)}"`
+}
+
 /**
  * Wrap trusted renderer markup (pele SVG) in a self-contained page: no scripts, no network.
  * @param content - the markup and its natural size in CSS pixels.
  * @param scheme - light or dark.
+ * @param options - nodes to frame; the client preview and `canvas_check` pass the same ids.
  * @returns the document and its size.
  */
-export function pageHtml(content: { readonly markup: string; readonly width: number; readonly height: number }, scheme: Scheme): Page {
+export function pageHtml(content: { readonly markup: string; readonly width: number; readonly height: number }, scheme: Scheme, options: PageOptions = {}): Page {
   const background = THEMES[scheme].pele.bg
+  // CSS outline on the node's <g> follows the drawn shape's box, whatever the shape (Chrome draws it on SVG groups).
+  const outline = options.outline?.length
+    ? `\n.pele .pele-node:is(${options.outline.map(id => `[data-id=${cssString(id)}]`).join(',')}){outline:2.5px dashed ${THEMES[scheme].comment};outline-offset:5px}`
+    : ''
   const html = `<!doctype html>
 <html lang="zh" style="color-scheme:${scheme}">
 <head>
@@ -86,7 +105,7 @@ export function pageHtml(content: { readonly markup: string; readonly width: num
 html,body{margin:0;background:${background}}
 body{padding:${PAGE_PADDING}px;width:max-content}
 .canvas-page>svg{display:block}
-${themeCss(scheme)}
+${themeCss(scheme)}${outline}
 </style>
 </head>
 <body class="canvas-page">${content.markup}</body>
