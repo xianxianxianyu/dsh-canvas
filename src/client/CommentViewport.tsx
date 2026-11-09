@@ -218,7 +218,28 @@ export function CommentViewport({ address, page, scheme, nodes, threads, comment
   }
   const draftNode = draft === undefined ? undefined : nodes.find(node => node.id === draft.node.id) ?? draft.node
   const draftAt = draftNode?.boxes[0] === undefined ? undefined : onScreen(view, draftNode.boxes[0])
+  const modeHint = t(surface.kind === 'mock' ? 'mock.commentModeHint' : 'comment.modeHint')
+  const topControls = <>
+    <div data-canvas-ui style={{ ...bar, position: 'static', pointerEvents: 'auto' }}>
+      <button type="button" aria-pressed={commenting} title={modeHint} aria-label={t('comment.mode')} onClick={() => {
+        setCommenting(on => !on)
+        setDraft(undefined)
+        pane.current?.focus({ preventScroll: true })
+      }} style={{ ...button, background: commenting ? red : 'transparent', color: commenting ? '#fff' : 'inherit' }}>💬 {t('comment.mode')}</button>
+      <button type="button" aria-pressed={listOpen} aria-label={t('comment.list')} title={t('comment.list')} onClick={() => { setListOpen(open => !open) }} style={button}>
+        ☰ {pending}
+      </button>
+    </div>
+    {surface.kind === 'mock' && <div data-canvas-ui style={{ ...bar, position: 'static', pointerEvents: 'auto', maxWidth: '100%', flexWrap: 'wrap' }}>{surface.controls}</div>}
+    {commenting && <div data-canvas-ui role="status" style={{ ...bar, position: 'static', pointerEvents: 'auto', padding: '4px 10px', fontSize: 12 }}>{modeHint}</div>}
+    {comments.state.status === 'failed' && <div data-canvas-ui role="alert" style={{ ...bar, position: 'static', pointerEvents: 'auto', padding: '4px 10px', fontSize: 12, color: red }}>{t('comment.unavailable', { error: comments.state.error })}</div>}
+  </>
   return <div ref={outer} style={{ position: 'relative', display: 'flex', width: '100%', height: '100%', minHeight: 240 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0 }}>
+      {surface.kind === 'mock' && <div data-canvas-mock-toolbar role="toolbar" aria-label={t('mock.toolbar')}
+        style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4, padding: 8, flexShrink: 0, borderBottom: '1px solid color-mix(in srgb, currentColor 15%, transparent)' }}>
+        {topControls}
+      </div>}
     <div ref={pane} data-canvas-preview data-canvas-diagram={surface.kind === 'diagram' ? '' : undefined} data-canvas-mock={surface.kind === 'mock' ? '' : undefined}
       data-canvas-commenting={commenting || undefined} tabIndex={0}
       onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { press.current = undefined }} onPointerLeave={() => { setHovered(undefined) }}
@@ -292,28 +313,17 @@ export function CommentViewport({ address, page, scheme, nodes, threads, comment
           <button type="submit" disabled={saving || !draft.text.trim()} style={{ ...button, background: red, color: '#fff', opacity: saving || !draft.text.trim() ? 0.5 : 1 }}>{t('comment.send')}</button>
         </div>
       </form>}
-      {/* The comment controls, the mode hint and the route error stack at the top left; the zoom bar keeps the bottom right, however narrow the pane. */}
-      <div style={{ position: 'absolute', left: 8, top: 8, right: 8, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4, pointerEvents: 'none' }}>
-        <div data-canvas-ui style={{ ...bar, position: 'static', pointerEvents: 'auto' }}>
-          <button type="button" aria-pressed={commenting} title={t('comment.modeHint')} aria-label={t('comment.mode')} onClick={() => {
-            setCommenting(on => !on)
-            setDraft(undefined)
-            pane.current?.focus({ preventScroll: true })
-          }} style={{ ...button, background: commenting ? red : 'transparent', color: commenting ? '#fff' : 'inherit' }}>💬 {t('comment.mode')}</button>
-          <button type="button" aria-pressed={listOpen} aria-label={t('comment.list')} title={t('comment.list')} onClick={() => { setListOpen(open => !open) }} style={button}>
-            ☰ {pending}
-          </button>
-        </div>
-        {surface.kind === 'mock' && <div data-canvas-ui style={{ ...bar, position: 'static', pointerEvents: 'auto', maxWidth: '100%', flexWrap: 'wrap' }}>{surface.controls}</div>}
-        {commenting && <div data-canvas-ui role="status" style={{ ...bar, position: 'static', pointerEvents: 'auto', padding: '4px 10px', fontSize: 12 }}>{t('comment.modeHint')}</div>}
-        {comments.state.status === 'failed' && <div data-canvas-ui role="alert" style={{ ...bar, position: 'static', pointerEvents: 'auto', padding: '4px 10px', fontSize: 12, color: red }}>{t('comment.unavailable', { error: comments.state.error })}</div>}
-      </div>
+      {/* Diagrams retain their overlay; mock controls occupy their own row above this pane. */}
+      {surface.kind === 'diagram' && <div style={{ position: 'absolute', left: 8, top: 8, right: 8, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4, pointerEvents: 'none' }}>
+        {topControls}
+      </div>}
       <div data-canvas-ui style={{ ...bar, right: 8, bottom: 8 + drawer }}>
         <button type="button" style={button} title={t('zoomOut')} aria-label={t('zoomOut')} onClick={() => { center(1 / 1.25) }}>−</button>
         <button type="button" style={button} title={t('actual')} aria-label={t('actual')} onClick={() => { center(1 / view.scale) }}>{Math.round(view.scale * 100)}%</button>
         <button type="button" style={button} title={t('zoomIn')} aria-label={t('zoomIn')} onClick={() => { center(1.25) }}>+</button>
         <button type="button" style={button} title={t('fit')} aria-label={t('fit')} onClick={() => { setManual(undefined) }}>⤢</button>
       </div>
+    </div>
     </div>
     {listOpen && <CommentList threads={threads} filter={filter} onFilter={setFilter} focused={focused} open={red} error={comments.saveError} t={t} drawer={drawer || undefined}
       apply={comments.apply} onClose={() => { setListOpen(false) }} onFocus={thread => { setFocused(thread.root.id) }} />}

@@ -12,7 +12,7 @@ The sanitizer re-parses its serialized output and only renders a stable, passive
 
 - Use a complete HTML document with `<!doctype html>`, UTF-8, a descriptive title, and CSS in `<style>` or `style` attributes.
 - Keep HTML nesting below 256 levels; deeper documents are rejected with a source location rather than partially rendered.
-- Set the intended viewport in the head: `<meta name="canvas-viewport" content="390x844">` for mobile or `1280x800` for desktop. Without a marker the default is desktop, 1280×800. The preview can switch to the desktop/mobile presets without editing the file; `canvas_check` uses the file's viewport.
+- Set the intended viewport in the head: `<meta name="canvas-viewport" content="390x844">` for mobile or `1280x800` for desktop. Without a marker the default is desktop, 1280×800. The preview toolbar above the frame switches desktop/mobile presets without covering the mock or editing the file; `canvas_check` uses the file's viewport.
 - Use real, specific copy: a plausible product name, meaningful field labels, useful errors, clear actions, and realistic data. Avoid lorem ipsum and rows of generic placeholders.
 - Keep one screen in each file, with deliberate hierarchy, spacing, typography, contrast and focus. Design for the declared dimensions; use `box-sizing: border-box` and responsive widths rather than hiding accidental horizontal overflow.
 - Element ids and form names are preserved, including names matching DOM APIs; inspection and picking use native prototype methods rather than named document properties.

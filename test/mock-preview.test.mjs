@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
+import { mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -22,8 +23,8 @@ import { createElement } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
 import { MockPreview } from './src/client/MockPreview.tsx'
-import { zh } from './src/client/locales.ts'
-const t = (key, params) => (zh[key] ?? key).replace(/\\{(\\w+)\\}/g, (_, name) => String(params?.[name]))
+import { zh, en } from './src/client/locales.ts'
+const t = (key, params) => ((window.language === 'en' ? en : zh)[key] ?? key).replace(/\\{(\\w+)\\}/g, (_, name) => String(params?.[name]))
 let comments = []
 let version = 0
 window.posts = []
@@ -261,4 +262,37 @@ test('form controls and document names cannot shadow native inspection and picki
     await comment(page, 'submit', 'Native APIs')
     assert.deepEqual(await page.evaluate(() => window.posts[0].ops[0].anchor), { target: 'send', label: '继续' })
   }, undefined, source)
+})
+
+test('mock toolbar and element-comment hint stay above rather than overlapping the frame', { skip }, async t => {
+  await withPreview(async page => {
+    await page.getByRole('button', { name: '手机', exact: true }).click()
+    await page.waitForFunction(() => document.querySelector('[data-canvas-mock] iframe').contentWindow.innerWidth === 390)
+    await page.getByRole('button', { name: '批注', exact: true }).click()
+    await page.waitForFunction(() => {
+      const pane = document.querySelector('[data-canvas-mock]').getBoundingClientRect()
+      const frame = document.querySelector('[data-canvas-mock] iframe').getBoundingClientRect()
+      return frame.top >= pane.top && frame.bottom <= pane.bottom
+    })
+    const geometry = await page.evaluate(() => {
+      const desktop = [...document.querySelectorAll('button')].find(button => button.textContent === '桌面')
+      const toolbar = document.querySelector('[data-canvas-mock-toolbar]') ?? desktop.closest('[data-canvas-ui]').parentElement
+      const frame = document.querySelector('[data-canvas-mock] iframe')
+      const a = toolbar.getBoundingClientRect(), b = frame.getBoundingClientRect()
+      return { toolbar: a.toJSON(), frame: b.toJSON(), intersects: a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top }
+    })
+    t.diagnostic(JSON.stringify(geometry))
+    if (process.env.CANVAS_MOCK_EVIDENCE) {
+      await mkdir(process.env.CANVAS_MOCK_EVIDENCE, { recursive: true })
+      await page.screenshot({ path: `${process.env.CANVAS_MOCK_EVIDENCE}/toolbar.png` })
+    }
+    assert.equal(geometry.intersects, false)
+    assert.ok(geometry.toolbar.bottom <= geometry.frame.top)
+    assert.match(await page.getByRole('status').innerText(), /点一个元素/u)
+    assert.doesNotMatch(await page.getByRole('status').innerText(), /节点/u)
+    assert.equal(await page.locator('[data-canvas-mock-toolbar]').count(), 1)
+    await page.evaluate(source => { window.language = 'en'; window.hide(); window.show(source) }, SOURCE)
+    assert.match(await page.getByRole('status').innerText(), /click an element/u)
+    assert.doesNotMatch(await page.getByRole('status').innerText(), /node/u)
+  }, { width: 420, height: 700 })
 })
